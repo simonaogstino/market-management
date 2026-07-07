@@ -8,6 +8,7 @@
   "scripts": {
     "setup": "node scripts/setup.mjs",
     "dev": "npm run dev -w @market/web",
+    "build": "npm run db:generate && npm run build -w @market/web",
     "start": "npm run start -w @market/web",
     "db:generate": "npm run generate -w @market/database",
     "db:push": "npm run push -w @market/database",

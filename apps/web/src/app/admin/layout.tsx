@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { hasPermission, NAV_ITEMS } from "@/lib/permissions";
 import { AdminNavLink } from "@/components/admin/AdminIcons";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
   if (!session?.user || (session.user.role !== "ADMIN" && session.user.role !== "OFFICE")) {
