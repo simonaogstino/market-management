@@ -1,0 +1,303 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  STAFF
+  OFFICE
+  VENDOR
+  CUSTOMER
+}
+
+enum SaleStatus {
+  PENDING_SYNC
+  SYNCED
+  CONFLICT
+  VOIDED
+}
+
+enum SaleKind {
+  SALE
+  RETURN
+}
+
+enum SyncConflictStatus {
+  OPEN
+  RESOLVED
+}
+
+enum StockMovementType {
+  RECEIVE
+  ADJUSTMENT
+  RETURN_TO_SUPPLIER
+}
+
+enum SupplierPaymentType {
+  PAYMENT
+  CREDIT
+}
+
+model Store {
+  id        String     @id @default(cuid())
+  name      String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  terminals Terminal[]
+  products  Product[]
+  categories Category[]
+  users     User[]
+  suppliers Supplier[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String?  @unique
+  name         String
+  passwordHash String
+  pinHash      String?
+  role         Role     @default(STAFF)
+  isActive     Boolean  @default(true)
+  permissions  String?
+  storeId      String
+  store        Store    @relation(fields: [storeId], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  stockMovements StockMovement[]
+  sales        Sale[]
+  supplierDeliveries SupplierDelivery[]
+  supplierPayments   SupplierPayment[]
+  supplierReturns    SupplierReturn[]
+}
+
+model Terminal {
+  id         String    @id @default(cuid())
+  name       String
+  apiKey     String    @unique
+  storeId    String
+  store      Store     @relation(fields: [storeId], references: [id])
+  lastSyncAt DateTime?
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  sales      Sale[]
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  name      String
+  storeId   String
+  store     Store     @relation(fields: [storeId], references: [id])
+  products  Product[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([storeId, name])
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  sku         String
+  name        String
+  description String?
+  costCents   Int      @default(0)
+  priceCents  Int
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id])
+  supplierId  String?
+  supplier    Supplier? @relation(fields: [supplierId], references: [id])
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id])
+  stockQty    Int      @default(0)
+  isActive    Boolean  @default(true)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  saleLines   SaleLine[]
+  stockMovements StockMovement[]
+  supplierDeliveryLines SupplierDeliveryLine[]
+  supplierReturnLines   SupplierReturnLine[]
+
+  @@unique([storeId, sku])
+  @@index([storeId, isActive])
+  @@index([supplierId])
+}
+
+model Sale {
+  id           String     @id @default(cuid())
+  localId      String
+  terminalId   String
+  terminal     Terminal   @relation(fields: [terminalId], references: [id])
+  staffId      String?
+  staff        User?      @relation(fields: [staffId], references: [id])
+  kind         SaleKind   @default(SALE)
+  status       SaleStatus @default(PENDING_SYNC)
+  totalCents   Int
+  soldAt       DateTime
+  syncedAt     DateTime?
+  voidedAt     DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  lines        SaleLine[]
+  conflicts    SyncConflict[]
+
+  @@unique([terminalId, localId])
+  @@index([status])
+  @@index([kind])
+  @@index([terminalId, soldAt])
+}
+
+model SaleLine {
+  id         String  @id @default(cuid())
+  saleId     String
+  sale       Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product @relation(fields: [productId], references: [id])
+  quantity   Int
+  unitCents  Int
+  lineCents  Int
+}
+
+model SyncConflict {
+  id         String             @id @default(cuid())
+  saleId     String
+  sale       Sale               @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId  String
+  message    String
+  status     SyncConflictStatus @default(OPEN)
+  createdAt  DateTime           @default(now())
+  resolvedAt DateTime?
+}
+
+model StockMovement {
+  id        String            @id @default(cuid())
+  productId String
+  product   Product           @relation(fields: [productId], references: [id])
+  storeId   String
+  type      StockMovementType
+  quantity  Int
+  note      String?
+  userId    String?
+  user      User?             @relation(fields: [userId], references: [id])
+  supplierDeliveryId String?
+  supplierDelivery   SupplierDelivery? @relation(fields: [supplierDeliveryId], references: [id])
+  supplierReturnId   String?
+  supplierReturn     SupplierReturn?   @relation(fields: [supplierReturnId], references: [id])
+  createdAt DateTime          @default(now())
+
+  @@index([storeId, createdAt])
+  @@index([productId])
+}
+
+model Supplier {
+  id                  String   @id @default(cuid())
+  name                String
+  contactPerson       String?
+  phone               String?
+  email               String?
+  address             String?
+  notes               String?
+  openingBalanceCents Int      @default(0)
+  isActive            Boolean  @default(true)
+  storeId             String
+  store               Store    @relation(fields: [storeId], references: [id])
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  deliveries          SupplierDelivery[]
+  payments            SupplierPayment[]
+  returns             SupplierReturn[]
+  products            Product[]
+
+  @@index([storeId, isActive])
+}
+
+model SupplierDelivery {
+  id                  String   @id @default(cuid())
+  supplierId          String
+  supplier            Supplier @relation(fields: [supplierId], references: [id])
+  storeId             String
+  referenceNumber     String?
+  deliveredAt         DateTime
+  note                String?
+  totalCostCents      Int
+  paidAtDeliveryCents Int      @default(0)
+  updateStock         Boolean  @default(true)
+  recordedById        String?
+  recordedBy          User?    @relation(fields: [recordedById], references: [id])
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  lines               SupplierDeliveryLine[]
+  stockMovements      StockMovement[]
+
+  @@index([supplierId, deliveredAt])
+  @@index([storeId, deliveredAt])
+}
+
+model SupplierDeliveryLine {
+  id           String           @id @default(cuid())
+  deliveryId   String
+  delivery     SupplierDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product          @relation(fields: [productId], references: [id])
+  quantity     Int
+  unitCostCents Int
+  lineCostCents Int
+
+  @@index([deliveryId])
+}
+
+model SupplierPayment {
+  id            String              @id @default(cuid())
+  supplierId    String
+  supplier      Supplier            @relation(fields: [supplierId], references: [id])
+  storeId       String
+  type          SupplierPaymentType
+  amountCents   Int
+  paidAt        DateTime
+  reference     String?
+  note          String?
+  recordedById  String?
+  recordedBy    User?               @relation(fields: [recordedById], references: [id])
+  createdAt     DateTime            @default(now())
+
+  @@index([supplierId, paidAt])
+  @@index([storeId, paidAt])
+}
+
+model SupplierReturn {
+  id              String   @id @default(cuid())
+  supplierId      String
+  supplier        Supplier @relation(fields: [supplierId], references: [id])
+  storeId         String
+  referenceNumber String?
+  returnedAt      DateTime
+  note            String?
+  totalCostCents  Int
+  recordedById    String?
+  recordedBy      User?    @relation(fields: [recordedById], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  lines           SupplierReturnLine[]
+  stockMovements  StockMovement[]
+
+  @@index([supplierId, returnedAt])
+  @@index([storeId, returnedAt])
+}
+
+model SupplierReturnLine {
+  id            String         @id @default(cuid())
+  returnId      String
+  supplierReturn SupplierReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  productId     String
+  product       Product        @relation(fields: [productId], references: [id])
+  quantity      Int
+  unitCostCents Int
+  lineCostCents Int
+
+  @@index([returnId])
+}

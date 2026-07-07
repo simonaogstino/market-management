@@ -1,0 +1,19 @@
+{
+  "name": "market-management",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "packages/*"
+  ],
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "dev": "npm run dev -w @market/web",
+    "start": "npm run start -w @market/web",
+    "db:generate": "npm run generate -w @market/database",
+    "db:push": "npm run push -w @market/database",
+    "db:seed": "npm run seed -w @market/database"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
