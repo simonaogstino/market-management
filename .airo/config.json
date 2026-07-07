@@ -1,0 +1,4 @@
+{
+  "buildCommand": "NODE_ENV=production npm install && npm run db:generate && npm run db:push && npm run db:seed && npm run build",
+  "serveCommand": "NODE_ENV=production npm start"
+}

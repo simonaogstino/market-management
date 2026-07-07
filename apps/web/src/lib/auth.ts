@@ -5,6 +5,7 @@ import { prisma } from "./db";
 import { parsePermissions } from "./permissions";
 
 export const authOptions: NextAuthOptions = {
+  secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET,
   session: { strategy: "jwt" },
   pages: { signIn: "/login" },
   providers: [
