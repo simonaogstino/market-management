@@ -49,6 +49,8 @@ export async function GET(request: Request) {
       receiptHeader: store.receiptHeader,
       receiptFooter: store.receiptFooter,
       timezone: store.timezone,
+      receiptPrefix: store.receiptPrefix,
+      receiptNextNumber: store.receiptNextNumber,
     },
   };
   return NextResponse.json(response);

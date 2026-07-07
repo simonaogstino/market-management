@@ -21,6 +21,7 @@ export interface SaleOutbox {
   staffId?: string;
   staffName?: string;
   voided?: boolean;
+  receiptNumber?: string;
 }
 
 export interface StaffSession {
@@ -36,6 +37,7 @@ export interface CompletedSale {
   lines: Array<SaleLineDto & { productName?: string }>;
   staffId?: string;
   staffName?: string;
+  receiptNumber?: string | null;
 }
 
 class PosDatabase extends Dexie {
@@ -277,14 +279,31 @@ export async function getPendingSales() {
   return all.filter((s) => !s.voided);
 }
 
-export async function markSaleSynced(localId: string) {
+export async function markSaleSynced(localId: string, receiptNumber?: string) {
   const sale = await posDb.salesOutbox.get(localId);
-  if (sale) await posDb.salesOutbox.put({ ...sale, syncStatus: "synced" });
+  if (sale) {
+    await posDb.salesOutbox.put({
+      ...sale,
+      syncStatus: "synced",
+      ...(receiptNumber ? { receiptNumber } : {}),
+    });
+  }
 }
 
-export async function markSaleConflict(localId: string, conflictJson: string) {
+export async function markSaleConflict(
+  localId: string,
+  conflictJson: string,
+  receiptNumber?: string,
+) {
   const sale = await posDb.salesOutbox.get(localId);
-  if (sale) await posDb.salesOutbox.put({ ...sale, syncStatus: "conflict", conflictJson });
+  if (sale) {
+    await posDb.salesOutbox.put({
+      ...sale,
+      syncStatus: "conflict",
+      conflictJson,
+      ...(receiptNumber ? { receiptNumber } : {}),
+    });
+  }
 }
 
 export async function countPendingSales() {

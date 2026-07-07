@@ -491,10 +491,15 @@ export async function updateStoreSettings(formData: FormData) {
   const receiptHeader = String(formData.get("receiptHeader") ?? "").trim() || null;
   const receiptFooter = String(formData.get("receiptFooter") ?? "").trim() || null;
   const lowStockThreshold = parseInt(String(formData.get("lowStockThreshold") ?? "10"), 10);
+  const receiptPrefix = String(formData.get("receiptPrefix") ?? "RCP-").trim() || "RCP-";
+  const receiptNextNumber = parseInt(String(formData.get("receiptNextNumber") ?? "1"), 10);
 
   if (!name) return { error: "Store name is required." };
   if (Number.isNaN(lowStockThreshold) || lowStockThreshold < 0) {
     return { error: "Low stock threshold must be 0 or greater." };
+  }
+  if (Number.isNaN(receiptNextNumber) || receiptNextNumber < 1) {
+    return { error: "Next receipt number must be at least 1." };
   }
 
   await prisma.store.update({
@@ -508,6 +513,8 @@ export async function updateStoreSettings(formData: FormData) {
       receiptHeader,
       receiptFooter,
       lowStockThreshold,
+      receiptPrefix,
+      receiptNextNumber,
     },
   });
 

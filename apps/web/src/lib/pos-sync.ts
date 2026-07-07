@@ -85,9 +85,13 @@ export async function pushPendingSales() {
 
     for (const result of data.results) {
       if (result.status === "synced") {
-        await markSaleSynced(result.localId);
+        await markSaleSynced(result.localId, result.receiptNumber);
       } else {
-        await markSaleConflict(result.localId, JSON.stringify(result.conflicts ?? []));
+        await markSaleConflict(
+          result.localId,
+          JSON.stringify(result.conflicts ?? []),
+          result.receiptNumber,
+        );
       }
     }
 

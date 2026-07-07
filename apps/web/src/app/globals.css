@@ -951,6 +951,76 @@ button.icon-action {
   line-height: 1.5;
 }
 
+.admin-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 1000;
+}
+
+.admin-modal {
+  width: min(560px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.admin-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.admin-modal-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.admin-modal-label {
+  display: block;
+  color: var(--muted);
+  font-size: 0.75rem;
+  margin-bottom: 0.125rem;
+}
+
+.admin-modal-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  font-size: 1.125rem;
+}
+
+.admin-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+.sales-receipt-link {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.sales-row-link {
+  text-decoration: none;
+  color: inherit;
+  font-weight: 400;
+}
+
+.sales-table tbody tr:hover {
+  background: #f8fafc;
+}
+
 @media print {
   .admin-sidebar,
   .no-print {

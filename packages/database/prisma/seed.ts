@@ -12,6 +12,8 @@ async function main() {
       receiptHeader: "Main Store",
       receiptFooter: "Thank you for shopping with us!",
       timezone: "Asia/Beirut",
+      receiptPrefix: "RCP-",
+      receiptNextNumber: 1,
     },
     create: {
       id: "seed-store-1",
@@ -23,6 +25,8 @@ async function main() {
       receiptHeader: "Main Store",
       receiptFooter: "Thank you for shopping with us!",
       timezone: "Asia/Beirut",
+      receiptPrefix: "RCP-",
+      receiptNextNumber: 1,
     },
   });
 
@@ -92,11 +96,44 @@ async function main() {
     },
   });
 
+  await backfillReceiptNumbers(store.id);
+
   console.log("Seed complete.");
   console.log("Admin login: admin@store.local / admin123");
   console.log("Accountant login: accountant@store.local / accountant123 (sales only)");
   console.log("Staff PINs: 111111 (Alice), 222222 (Bob)");
   console.log("POS API keys: pos-terminal-1-key, pos-terminal-2-key");
+}
+
+function formatReceiptNumber(prefix: string, seq: number) {
+  return `${prefix}${String(seq).padStart(5, "0")}`;
+}
+
+async function backfillReceiptNumbers(storeId: string) {
+  const store = await prisma.store.findUniqueOrThrow({ where: { id: storeId } });
+  const sales = await prisma.sale.findMany({
+    where: {
+      receiptNumber: null,
+      terminal: { storeId },
+    },
+    orderBy: { soldAt: "asc" },
+  });
+
+  if (sales.length === 0) return;
+
+  let next = store.receiptNextNumber;
+  for (const sale of sales) {
+    await prisma.sale.update({
+      where: { id: sale.id },
+      data: { receiptNumber: formatReceiptNumber(store.receiptPrefix, next) },
+    });
+    next++;
+  }
+
+  await prisma.store.update({
+    where: { id: storeId },
+    data: { receiptNextNumber: next },
+  });
 }
 
 async function seedOfficeUsers(storeId: string) {

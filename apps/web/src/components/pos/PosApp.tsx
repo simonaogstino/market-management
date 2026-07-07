@@ -17,6 +17,7 @@ import {
   getTerminalConfig,
   incrementCartLine,
   listProducts,
+  posDb,
   removeFromCart,
   clearStaffSession,
   getStoreSettings,
@@ -178,9 +179,16 @@ export function PosApp() {
       ? await completeReturn(uuid(), staff)
       : await completeSale(uuid(), staff);
     if (!sale) return;
+    let receiptNumber: string | null = null;
+    if (isOnline()) {
+      await pushPendingSales();
+      const row = await posDb.salesOutbox.get(sale.localId);
+      receiptNumber = row?.receiptNumber ?? null;
+    }
     setReceipt({
       ...sale,
       kind: posMode === "return" ? "RETURN" : "SALE",
+      receiptNumber,
       lines: sale.lines.map((line) => ({
         ...line,
         productName: cartSnapshot.find((c) => c.productId === line.productId)?.name ?? "Item",

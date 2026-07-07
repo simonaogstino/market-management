@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import type { SalePushDto, SyncPushResult } from "@market/shared";
 import { prisma, SaleStatus } from "@market/database";
 import { authOptions } from "./auth";
-
+import { ensureSaleReceiptNumber } from "./assign-receipt-number";
 export async function requireAdmin() {
   const session = await getServerSession(authOptions);
   if (!session?.user || session.user.role !== "ADMIN") {
@@ -35,12 +35,21 @@ export async function processSalePush(
   });
 
   if (existing?.status === "SYNCED") {
-    return { localId: sale.localId, status: "synced", serverSaleId: existing.id };
+    return {
+      localId: sale.localId,
+      status: "synced",
+      serverSaleId: existing.id,
+      receiptNumber: existing.receiptNumber ?? undefined,
+    };
   }
   if (existing?.status === "VOIDED") {
-    return { localId: sale.localId, status: "synced", serverSaleId: existing.id };
+    return {
+      localId: sale.localId,
+      status: "synced",
+      serverSaleId: existing.id,
+      receiptNumber: existing.receiptNumber ?? undefined,
+    };
   }
-
   const conflicts: Array<{ productId: string; message: string }> = [];
 
   if (!isReturn) {
@@ -77,44 +86,56 @@ export async function processSalePush(
   }
 
   if (conflicts.length > 0) {
-    const conflictSale = await prisma.sale.upsert({
-      where: { terminalId_localId: { terminalId, localId: sale.localId } },
-      update: {
-        status: SaleStatus.CONFLICT,
-        kind: isReturn ? "RETURN" : "SALE",
-        totalCents: sale.totalCents,
-        soldAt: new Date(sale.soldAt),
-      },
-      create: {
-        localId: sale.localId,
-        terminalId,
-        kind: isReturn ? "RETURN" : "SALE",
-        status: SaleStatus.CONFLICT,
-        totalCents: sale.totalCents,
-        soldAt: new Date(sale.soldAt),
-        lines: {
-          create: sale.lines.map((line) => ({
-            productId: line.productId,
-            quantity: line.quantity,
-            unitCents: line.unitCents,
-            lineCents: line.lineCents,
-          })),
+    const conflictSale = await prisma.$transaction(async (tx) => {
+      const created = await tx.sale.upsert({
+        where: { terminalId_localId: { terminalId, localId: sale.localId } },
+        update: {
+          status: SaleStatus.CONFLICT,
+          kind: isReturn ? "RETURN" : "SALE",
+          totalCents: sale.totalCents,
+          soldAt: new Date(sale.soldAt),
+          staffId: sale.staffId ?? undefined,
         },
-      },
+        create: {
+          localId: sale.localId,
+          terminalId,
+          kind: isReturn ? "RETURN" : "SALE",
+          status: SaleStatus.CONFLICT,
+          totalCents: sale.totalCents,
+          soldAt: new Date(sale.soldAt),
+          staffId: sale.staffId ?? undefined,
+          lines: {
+            create: sale.lines.map((line) => ({
+              productId: line.productId,
+              quantity: line.quantity,
+              unitCents: line.unitCents,
+              lineCents: line.lineCents,
+            })),
+          },
+        },
+      });
+
+      await ensureSaleReceiptNumber(tx, storeId, created.id, created.receiptNumber);
+
+      await tx.syncConflict.deleteMany({ where: { saleId: created.id } });
+      await tx.syncConflict.createMany({
+        data: conflicts.map((c) => ({
+          saleId: created.id,
+          productId: c.productId,
+          message: c.message,
+        })),
+      });
+
+      return tx.sale.findUniqueOrThrow({ where: { id: created.id } });
     });
 
-    await prisma.syncConflict.deleteMany({ where: { saleId: conflictSale.id } });
-    await prisma.syncConflict.createMany({
-      data: conflicts.map((c) => ({
-        saleId: conflictSale.id,
-        productId: c.productId,
-        message: c.message,
-      })),
-    });
-
-    return { localId: sale.localId, status: "conflict", conflicts };
+    return {
+      localId: sale.localId,
+      status: "conflict",
+      conflicts,
+      receiptNumber: conflictSale.receiptNumber ?? undefined,
+    };
   }
-
   const syncedSale = await prisma.$transaction(async (tx) => {
     const created = await tx.sale.upsert({
       where: { terminalId_localId: { terminalId, localId: sale.localId } },
@@ -156,12 +177,18 @@ export async function processSalePush(
       });
     }
 
-    return created;
+    await ensureSaleReceiptNumber(tx, storeId, created.id, created.receiptNumber);
+
+    return tx.sale.findUniqueOrThrow({ where: { id: created.id } });
   });
 
-  return { localId: sale.localId, status: "synced", serverSaleId: syncedSale.id };
+  return {
+    localId: sale.localId,
+    status: "synced",
+    serverSaleId: syncedSale.id,
+    receiptNumber: syncedSale.receiptNumber ?? undefined,
+  };
 }
-
 export function unauthorized() {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 }

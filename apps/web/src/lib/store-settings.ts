@@ -11,6 +11,8 @@ export type StoreSettings = {
   receiptHeader: string | null;
   receiptFooter: string | null;
   timezone: string;
+  receiptPrefix: string;
+  receiptNextNumber: number;
 };
 
 export const CURRENCY_OPTIONS = [
@@ -72,6 +74,8 @@ export async function getStoreSettings(storeId: string): Promise<StoreSettings> 
     receiptHeader: store.receiptHeader,
     receiptFooter: store.receiptFooter,
     timezone: store.timezone,
+    receiptPrefix: store.receiptPrefix,
+    receiptNextNumber: store.receiptNextNumber,
   };
 }
 

@@ -110,6 +110,36 @@ export function StoreSettingsForm({
         </label>
       </fieldset>
 
+      <fieldset className="permissions-fieldset" disabled={!canEdit}>
+        <legend>Receipt numbering</legend>
+        <label>
+          Receipt prefix
+          <input
+            name="receiptPrefix"
+            defaultValue={settings.receiptPrefix}
+            placeholder="RCP-"
+          />
+        </label>
+        <label>
+          Next receipt number
+          <input
+            name="receiptNextNumber"
+            type="number"
+            min={1}
+            required
+            defaultValue={settings.receiptNextNumber}
+          />
+        </label>
+        <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--muted)" }}>
+          Next sale will be numbered{" "}
+          <strong>
+            {settings.receiptPrefix}
+            {String(settings.receiptNextNumber).padStart(5, "0")}
+          </strong>
+          . Only increase this if you need to skip numbers — duplicates are prevented automatically.
+        </p>
+      </fieldset>
+
       {error && <p className="form-error">{error}</p>}
 
       {canEdit ? (

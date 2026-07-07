@@ -53,6 +53,8 @@ model Store {
   receiptHeader      String?
   receiptFooter      String?
   timezone           String     @default("UTC")
+  receiptPrefix      String     @default("RCP-")
+  receiptNextNumber  Int        @default(1)
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
   terminals Terminal[]
@@ -144,6 +146,7 @@ model Sale {
   staff        User?      @relation(fields: [staffId], references: [id])
   kind         SaleKind   @default(SALE)
   status       SaleStatus @default(PENDING_SYNC)
+  receiptNumber String?
   totalCents   Int
   soldAt       DateTime
   syncedAt     DateTime?
@@ -154,6 +157,7 @@ model Sale {
   conflicts    SyncConflict[]
 
   @@unique([terminalId, localId])
+  @@index([receiptNumber])
   @@index([status])
   @@index([kind])
   @@index([terminalId, soldAt])

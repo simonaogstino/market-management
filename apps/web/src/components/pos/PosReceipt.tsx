@@ -14,6 +14,8 @@ const DEFAULT_STORE: StoreSettingsDto = {
   receiptHeader: null,
   receiptFooter: null,
   timezone: "UTC",
+  receiptPrefix: "RCP-",
+  receiptNextNumber: 1,
 };
 
 export function PosReceipt({
@@ -59,7 +61,13 @@ export function PosReceipt({
             )}
             {sale.staffName && <div>Staff: {sale.staffName}</div>}
             <div>{soldAtLabel}</div>
-            <div className="receipt-id">#{sale.localId.slice(0, 8).toUpperCase()}</div>
+            <div className="receipt-id">
+              {sale.receiptNumber ? (
+                <strong>Receipt {sale.receiptNumber}</strong>
+              ) : (
+                <>Ref #{sale.localId.slice(0, 8).toUpperCase()} (pending sync)</>
+              )}
+            </div>
           </div>
           <hr />
           {sale.lines.map((line, i) => (

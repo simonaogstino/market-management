@@ -73,6 +73,8 @@ export interface StoreSettingsDto {
   receiptHeader: string | null;
   receiptFooter: string | null;
   timezone: string;
+  receiptPrefix: string;
+  receiptNextNumber: number;
 }
 
 export interface SyncPushRequest {
@@ -83,6 +85,7 @@ export interface SyncPushResult {
   localId: string;
   status: "synced" | "conflict";
   serverSaleId?: string;
+  receiptNumber?: string;
   conflicts?: Array<{ productId: string; message: string }>;
 }
 
