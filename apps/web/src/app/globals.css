@@ -942,6 +942,15 @@ button.icon-action {
   font-size: 0.875rem;
 }
 
+.receipt-preview {
+  background: #f8fafc;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
 @media print {
   .admin-sidebar,
   .no-print {

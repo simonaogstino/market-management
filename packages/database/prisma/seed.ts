@@ -4,10 +4,25 @@ import { hash } from "bcryptjs";
 async function main() {
   const store = await prisma.store.upsert({
     where: { id: "seed-store-1" },
-    update: {},
+    update: {
+      address: "123 Market Street",
+      phone: "+1 555-0100",
+      currency: "USD",
+      lowStockThreshold: 10,
+      receiptHeader: "Main Store",
+      receiptFooter: "Thank you for shopping with us!",
+      timezone: "Asia/Beirut",
+    },
     create: {
       id: "seed-store-1",
       name: "Main Store",
+      address: "123 Market Street",
+      phone: "+1 555-0100",
+      currency: "USD",
+      lowStockThreshold: 10,
+      receiptHeader: "Main Store",
+      receiptFooter: "Thank you for shopping with us!",
+      timezone: "Asia/Beirut",
     },
   });
 

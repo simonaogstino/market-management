@@ -477,3 +477,41 @@ export async function toggleOfficeUserActiveForm(formData: FormData) {
 
   revalidatePath("/admin/users");
 }
+
+// ——— Store settings ———
+
+export async function updateStoreSettings(formData: FormData) {
+  const session = await requirePermission("settings:manage");
+
+  const name = String(formData.get("name") ?? "").trim();
+  const address = String(formData.get("address") ?? "").trim() || null;
+  const phone = String(formData.get("phone") ?? "").trim() || null;
+  const currency = String(formData.get("currency") ?? "USD").trim();
+  const timezone = String(formData.get("timezone") ?? "UTC").trim();
+  const receiptHeader = String(formData.get("receiptHeader") ?? "").trim() || null;
+  const receiptFooter = String(formData.get("receiptFooter") ?? "").trim() || null;
+  const lowStockThreshold = parseInt(String(formData.get("lowStockThreshold") ?? "10"), 10);
+
+  if (!name) return { error: "Store name is required." };
+  if (Number.isNaN(lowStockThreshold) || lowStockThreshold < 0) {
+    return { error: "Low stock threshold must be 0 or greater." };
+  }
+
+  await prisma.store.update({
+    where: { id: session.user.storeId },
+    data: {
+      name,
+      address,
+      phone,
+      currency,
+      timezone,
+      receiptHeader,
+      receiptFooter,
+      lowStockThreshold,
+    },
+  });
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/settings");
+  return { success: true };
+}

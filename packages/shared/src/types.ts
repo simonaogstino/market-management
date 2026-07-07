@@ -61,6 +61,18 @@ export interface SyncPullResponse {
   serverTime: string;
   products: ProductDto[];
   categories: CategoryDto[];
+  store: StoreSettingsDto;
+}
+
+export interface StoreSettingsDto {
+  name: string;
+  address: string | null;
+  phone: string | null;
+  currency: string;
+  lowStockThreshold: number;
+  receiptHeader: string | null;
+  receiptFooter: string | null;
+  timezone: string;
 }
 
 export interface SyncPushRequest {
@@ -87,3 +99,19 @@ export interface TerminalConfig {
 }
 
 export const SYNC_INTERVAL_MS = 30_000;
+
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+  CAD: "C$",
+  AUD: "A$",
+  LBP: "L.L.",
+  AED: "د.إ",
+  SAR: "﷼",
+};
+
+export function formatMoney(cents: number, currency = "USD") {
+  const symbol = CURRENCY_SYMBOLS[currency] ?? `${currency} `;
+  return `${symbol}${(cents / 100).toFixed(2)}`;
+}

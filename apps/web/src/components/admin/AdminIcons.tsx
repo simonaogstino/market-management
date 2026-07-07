@@ -10,6 +10,7 @@ import {
   Power,
   Receipt,
   BarChart3,
+  Settings,
   ShoppingCart,
   Truck,
   UserCog,
@@ -28,6 +29,7 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   staff: Users,
   users: UserCog,
   terminals: Monitor,
+  settings: Settings,
   pos: ShoppingCart,
 };
 

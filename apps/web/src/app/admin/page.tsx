@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { requirePageAccess } from "@/lib/admin-session";
+import { formatStoreMoney, getStoreSettings } from "@/lib/store-settings";
 
 function endOfDay(date: Date) {
   const d = new Date(date);
@@ -15,10 +16,10 @@ function startOfDay(date: Date) {
 }
 
 export default async function AdminDashboardPage() {
-  await requirePageAccess("dashboard");
+  const session = await requirePageAccess("dashboard");
+  const settings = await getStoreSettings(session.user.storeId);
 
-  const todayStart = startOfDay(new Date());
-  const todayEnd = endOfDay(new Date());
+  const todayStart = startOfDay(new Date());  const todayEnd = endOfDay(new Date());
 
   const [productCount, terminalCount, pendingSales, conflicts, todaySalesRows] =
     await Promise.all([
@@ -39,11 +40,10 @@ export default async function AdminDashboardPage() {
   );
 
   const lowStock = await prisma.product.findMany({
-    where: { stockQty: { lte: 10 }, isActive: true },
+    where: { stockQty: { lte: settings.lowStockThreshold }, isActive: true },
     orderBy: { stockQty: "asc" },
     take: 5,
   });
-
   return (
     <div>
       <h1 style={{ marginTop: 0 }}>Dashboard</h1>
@@ -67,9 +67,8 @@ export default async function AdminDashboardPage() {
           <div>
             <h2 style={{ margin: "0 0 0.25rem", fontSize: "1.125rem" }}>Today&apos;s revenue</h2>
             <p style={{ margin: 0, fontSize: "1.5rem", fontWeight: 700 }}>
-              ${(todayNetCents / 100).toFixed(2)}
-            </p>
-          </div>
+              {formatStoreMoney(todayNetCents, settings)}
+            </p>          </div>
           <Link className="btn btn-secondary" href="/admin/sales">
             View sales
           </Link>
@@ -77,8 +76,9 @@ export default async function AdminDashboardPage() {
       </section>
 
       <section className="card">
-        <h2 style={{ marginTop: 0, fontSize: "1.125rem" }}>Low stock</h2>
-        {lowStock.length === 0 ? (
+        <h2 style={{ marginTop: 0, fontSize: "1.125rem" }}>
+          Low stock (≤ {settings.lowStockThreshold})
+        </h2>        {lowStock.length === 0 ? (
           <p style={{ color: "var(--muted)" }}>No low-stock items.</p>
         ) : (
           <table style={{ width: "100%", borderCollapse: "collapse" }}>

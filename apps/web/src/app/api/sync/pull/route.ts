@@ -7,7 +7,7 @@ export async function GET(request: Request) {
   const terminal = await authenticateTerminal(request);
   if (!terminal) return unauthorized();
 
-  const [products, categories] = await Promise.all([
+  const [products, categories, store] = await Promise.all([
     prisma.product.findMany({
       where: { storeId: terminal.storeId, isActive: true },
       orderBy: { name: "asc" },
@@ -16,8 +16,8 @@ export async function GET(request: Request) {
       where: { storeId: terminal.storeId },
       orderBy: { name: "asc" },
     }),
+    prisma.store.findUniqueOrThrow({ where: { id: terminal.storeId } }),
   ]);
-
   await prisma.terminal.update({
     where: { id: terminal.id },
     data: { lastSyncAt: new Date() },
@@ -40,7 +40,16 @@ export async function GET(request: Request) {
       updatedAt: p.updatedAt.toISOString(),
     })),
     categories: categories.map((c) => ({ id: c.id, name: c.name })),
+    store: {
+      name: store.name,
+      address: store.address,
+      phone: store.phone,
+      currency: store.currency,
+      lowStockThreshold: store.lowStockThreshold,
+      receiptHeader: store.receiptHeader,
+      receiptFooter: store.receiptFooter,
+      timezone: store.timezone,
+    },
   };
-
   return NextResponse.json(response);
 }

@@ -44,10 +44,17 @@ enum SupplierPaymentType {
 }
 
 model Store {
-  id        String     @id @default(cuid())
-  name      String
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id                 String     @id @default(cuid())
+  name               String
+  address            String?
+  phone              String?
+  currency           String     @default("USD")
+  lowStockThreshold  Int        @default(10)
+  receiptHeader      String?
+  receiptFooter      String?
+  timezone           String     @default("UTC")
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
   terminals Terminal[]
   products  Product[]
   categories Category[]

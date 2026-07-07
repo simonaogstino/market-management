@@ -1,7 +1,11 @@
 export const PERMISSION_GROUPS = [
   {
     label: "General",
-    items: [{ key: "dashboard", label: "View dashboard" }],
+    items: [
+      { key: "dashboard", label: "View dashboard" },
+      { key: "settings:view", label: "View store settings" },
+      { key: "settings:manage", label: "Edit store settings" },
+    ],
   },
   {
     label: "Products",
@@ -90,6 +94,7 @@ export const NAV_ITEMS: Array<{
   { href: "/admin/staff", label: "POS Staff", icon: "staff", permission: "staff:view" },
   { href: "/admin/users", label: "Office Users", icon: "users", permission: "users:view" },
   { href: "/admin/terminals", label: "POS Terminals", icon: "terminals", permission: "terminals:view" },
+  { href: "/admin/settings", label: "Settings", icon: "settings", permission: "settings:view" },
 ];
 
 export function getDefaultAdminPath(role: string, permissions: string[]): string {

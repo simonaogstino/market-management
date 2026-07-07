@@ -1,5 +1,5 @@
 import Dexie, { type Table } from "dexie";
-import type { ProductDto, SaleLineDto } from "@market/shared";
+import type { ProductDto, SaleLineDto, StoreSettingsDto } from "@market/shared";
 
 export interface CartLine {
   productId: string;
@@ -96,6 +96,20 @@ export async function saveTerminalConfig(config: {
   await setSetting("apiKey", config.apiKey);
   if (config.terminalId) await setSetting("terminalId", config.terminalId);
   if (config.terminalName) await setSetting("terminalName", config.terminalName);
+}
+
+export async function saveStoreSettings(settings: StoreSettingsDto) {
+  await setSetting("storeSettings", JSON.stringify(settings));
+}
+
+export async function getStoreSettings(): Promise<StoreSettingsDto | null> {
+  const raw = await getSetting("storeSettings");
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as StoreSettingsDto;
+  } catch {
+    return null;
+  }
 }
 
 export async function getStaffSession(): Promise<StaffSession | null> {

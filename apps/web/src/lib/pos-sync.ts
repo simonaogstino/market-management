@@ -9,6 +9,7 @@ import {
   upsertProducts,
   voidSaleLocal,
   getLastVoidableSale,
+  saveStoreSettings,
 } from "./pos-db";
 
 export function isOnline() {
@@ -49,6 +50,7 @@ export async function pullCatalog(): Promise<SyncPullResponse | null> {
     const response = await apiFetch("/api/sync/pull");
     const data = (await response.json()) as SyncPullResponse;
     await upsertProducts(data.products);
+    await saveStoreSettings(data.store);
     await setLastSyncAt(data.serverTime);
     return data;
   } catch {

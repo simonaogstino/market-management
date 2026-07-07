@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { requirePageAccess } from "@/lib/admin-session";
-
+import { formatInTimezone, formatStoreMoney, getStoreSettings } from "@/lib/store-settings";
 function startOfDay(date: Date) {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -18,10 +18,10 @@ export default async function SalesPage({
 }: {
   searchParams: Promise<{ date?: string; terminal?: string }>;
 }) {
-  await requirePageAccess("sales:view");
+  const session = await requirePageAccess("sales:view");
+  const settings = await getStoreSettings(session.user.storeId);
 
-  const { date, terminal } = await searchParams;
-  const selectedDate = date ? new Date(date) : new Date();
+  const { date, terminal } = await searchParams;  const selectedDate = date ? new Date(date) : new Date();
   const dayStart = startOfDay(selectedDate);
   const dayEnd = endOfDay(selectedDate);
 
@@ -49,7 +49,9 @@ export default async function SalesPage({
   return (
     <div>
       <h1 style={{ marginTop: 0 }}>Sales</h1>
-
+      <p style={{ color: "var(--muted)", marginTop: 0, fontSize: "0.875rem" }}>
+        Times shown in {settings.timezone}
+      </p>
       <form className="card filters-form" method="get">
         <label>
           Date
@@ -73,8 +75,7 @@ export default async function SalesPage({
 
       <div className="card" style={{ marginBottom: "1rem" }}>
         <strong>{sales.length}</strong> sale(s) · Total{" "}
-        <strong>${(totalCents / 100).toFixed(2)}</strong>
-      </div>
+        <strong>{formatStoreMoney(totalCents, settings)}</strong>      </div>
 
       <div className="card" style={{ overflowX: "auto" }}>
         {sales.length === 0 ? (
@@ -94,8 +95,12 @@ export default async function SalesPage({
             <tbody>
               {sales.map((sale) => (
                 <tr key={sale.id}>
-                  <td>{sale.soldAt.toLocaleString()}</td>
-                  <td>{sale.terminal.name}</td>
+                  <td>
+                    {formatInTimezone(sale.soldAt, settings.timezone, {
+                      dateStyle: "short",
+                      timeStyle: "short",
+                    })}
+                  </td>                  <td>{sale.terminal.name}</td>
                   <td>{sale.staff?.name ?? "—"}</td>
                   <td>
                     {sale.lines.map((line) => (
@@ -105,9 +110,9 @@ export default async function SalesPage({
                     ))}
                   </td>
                   <td align="right">
-                    {sale.kind === "RETURN" ? "−" : ""}${(sale.totalCents / 100).toFixed(2)}
-                  </td>
-                  <td>
+                    {sale.kind === "RETURN" ? "−" : ""}
+                    {formatStoreMoney(sale.totalCents, settings)}
+                  </td>                  <td>
                     {sale.kind === "RETURN" && <span className="badge">Return</span>}{" "}
                     <SaleStatusBadge status={sale.status} />
                   </td>

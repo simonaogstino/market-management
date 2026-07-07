@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuid } from "uuid";
-import type { ProductDto } from "@market/shared";
-import { SYNC_INTERVAL_MS } from "@market/shared";
+import type { ProductDto, StoreSettingsDto } from "@market/shared";
+import { SYNC_INTERVAL_MS, formatMoney } from "@market/shared";
 import {
   addToCart,
   clearCart,
@@ -19,6 +19,7 @@ import {
   listProducts,
   removeFromCart,
   clearStaffSession,
+  getStoreSettings,
   type CartLine,
   type CompletedSale,
   type StaffSession,
@@ -51,6 +52,7 @@ export function PosApp() {
   const [suppliers, setSuppliers] = useState<Array<{ id: string; name: string }>>([]);
   const [search, setSearch] = useState("");
   const [receipt, setReceipt] = useState<CompletedSale | null>(null);
+  const [storeSettings, setStoreSettings] = useState<StoreSettingsDto | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -105,6 +107,7 @@ export function PosApp() {
     setCart(await getCart());
     setPendingCount(await countPendingSales());
     setConflictCount(await countConflictSales());
+    setStoreSettings(await getStoreSettings());
     if (isOnline()) {
       try {
         const config = await getTerminalConfig();
@@ -305,7 +308,7 @@ export function PosApp() {
               <button key={product.id} className="pos-product-card" onClick={() => handleAdd(product)}>
                 <div className="pos-product-name">{product.name}</div>
                 <div className="pos-muted">{product.sku}</div>
-                <div className="pos-price">${(product.priceCents / 100).toFixed(2)}</div>
+                <div className="pos-price">{formatMoney(product.priceCents, storeSettings?.currency)}</div>
                 <div className="pos-stock">Stock: {product.stockQty}</div>
               </button>
             ))}
@@ -357,12 +360,12 @@ export function PosApp() {
                       }}>Remove</button>
                     </div>
                   </div>
-                  <strong>${(line.lineCents / 100).toFixed(2)}</strong>
+                  <strong>{formatMoney(line.lineCents, storeSettings?.currency)}</strong>
                 </div>
               ))}
               <div className="pos-total">
                 <span>{posMode === "return" ? "Refund total" : "Total"}</span>
-                <span>${(totalCents / 100).toFixed(2)}</span>
+                <span>{formatMoney(totalCents, storeSettings?.currency)}</span>
               </div>
               <div className="pos-actions">
                 <button className="btn" type="button" onClick={handleCheckout}>
@@ -387,6 +390,7 @@ export function PosApp() {
         <PosReceipt
           sale={receipt}
           terminalName={terminalName}
+          store={storeSettings}
           onClose={() => setReceipt(null)}
         />
       )}

@@ -4,6 +4,7 @@ import { ReportActions } from "@/components/admin/reports/ReportActions";
 import { ReportFilter, ReportHeader } from "@/components/admin/reports/ReportParts";
 import { renderReport } from "@/components/admin/reports/ReportRenderer";
 import { getReportById } from "@/lib/reports/definitions";
+import { getStoreSettings } from "@/lib/store-settings";
 import { resolveDateRange } from "@/lib/reports/date-range";
 
 export default async function ReportPage({
@@ -13,7 +14,8 @@ export default async function ReportPage({
   params: Promise<{ reportId: string }>;
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  await requirePageAccess("reports:view");
+  const session = await requirePageAccess("reports:view");
+  const storeSettings = await getStoreSettings(session.user.storeId);
 
   const { reportId } = await params;
   const report = getReportById(reportId);
@@ -29,8 +31,12 @@ export default async function ReportPage({
   const extraParams: Record<string, number> = {};
   for (const param of report.extraParams ?? []) {
     const raw = sp[param.key];
-    const n = raw ? parseInt(raw, 10) : param.default;
-    extraParams[param.key] = Number.isNaN(n) || n < 1 ? param.default : n;
+    let fallback = param.default;
+    if (param.key === "threshold" && reportId === "low-stock") {
+      fallback = storeSettings.lowStockThreshold;
+    }
+    const n = raw ? parseInt(raw, 10) : fallback;
+    extraParams[param.key] = Number.isNaN(n) || n < 0 ? fallback : n;
   }
 
   const extraParamStrings = Object.fromEntries(
