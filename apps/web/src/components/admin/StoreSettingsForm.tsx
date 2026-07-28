@@ -87,6 +87,25 @@ export function StoreSettingsForm({
       </fieldset>
 
       <fieldset className="permissions-fieldset" disabled={!canEdit}>
+        <legend>POS discounts</legend>
+        <label>
+          Maximum discount (%)
+          <input
+            name="maxDiscountPercent"
+            type="number"
+            min={0}
+            max={100}
+            required
+            defaultValue={settings.maxDiscountPercent}
+          />
+        </label>
+        <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--muted)" }}>
+          Cashiers with the &quot;Apply custom discount&quot; privilege can discount a sale up to this
+          percent. Set to 0 to disable discounts store-wide.
+        </p>
+      </fieldset>
+
+      <fieldset className="permissions-fieldset" disabled={!canEdit}>
         <legend>POS receipts</legend>
         <label>
           Receipt header

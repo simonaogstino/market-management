@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuid } from "uuid";
 import type { ProductDto, StoreSettingsDto } from "@market/shared";
-import { SYNC_INTERVAL_MS, formatMoney } from "@market/shared";
+import { SYNC_INTERVAL_MS, discountedUnitCents, formatMoney } from "@market/shared";
 import {
   addToCart,
   clearCart,
@@ -22,6 +22,7 @@ import {
   clearStaffSession,
   getStoreSettings,
   repriceCart,
+  applyCartDiscount,
   type CartLine,
   type CompletedSale,
   type StaffSession,
@@ -52,6 +53,8 @@ export function PosApp() {
   const [showReceive, setShowReceive] = useState(false);
   const [showSupplierReturn, setShowSupplierReturn] = useState(false);
   const [posMode, setPosMode] = useState<"sale" | "return" | "owner">("sale");
+  const [discountPercent, setDiscountPercent] = useState(0);
+  const [discountInput, setDiscountInput] = useState("");
   const [suppliers, setSuppliers] = useState<Array<{ id: string; name: string }>>([]);
   const [search, setSearch] = useState("");
   const [receipt, setReceipt] = useState<CompletedSale | null>(null);
@@ -75,7 +78,40 @@ export function PosApp() {
 
   async function switchMode(next: "sale" | "return" | "owner") {
     setPosMode(next);
-    await repriceCart(next);
+    setDiscountPercent(0);
+    setDiscountInput("");
+    await repriceCart(next, 0);
+    setCart(await getCart());
+  }
+
+  const maxDiscountPercent = storeSettings?.maxDiscountPercent ?? 0;
+  const canDiscount =
+    can("pos:discount") && posMode === "sale" && maxDiscountPercent > 0;
+
+  async function applyDiscountFromInput() {
+    if (!canDiscount) return;
+    const raw = Number.parseFloat(discountInput);
+    if (Number.isNaN(raw) || raw < 0) {
+      setError("Enter a valid discount percent.");
+      return;
+    }
+    const capped = Math.min(Math.round(raw * 100) / 100, maxDiscountPercent);
+    if (raw > maxDiscountPercent) {
+      setError(`Max discount is ${maxDiscountPercent}%.`);
+    } else {
+      setError("");
+    }
+    setDiscountPercent(capped);
+    setDiscountInput(capped > 0 ? String(capped) : "");
+    await applyCartDiscount(capped);
+    setCart(await getCart());
+  }
+
+  async function clearDiscount() {
+    setDiscountPercent(0);
+    setDiscountInput("");
+    setError("");
+    await applyCartDiscount(0);
     setCart(await getCart());
   }
 
@@ -186,7 +222,11 @@ export function PosApp() {
   }, [products, search]);
 
   async function handleAdd(product: ProductDto) {
-    const unitCents = posMode === "owner" ? product.costCents : product.priceCents;
+    const listOrCost = posMode === "owner" ? product.costCents : product.priceCents;
+    const unitCents =
+      posMode === "sale" && discountPercent > 0
+        ? discountedUnitCents(product.priceCents, discountPercent)
+        : listOrCost;
     await addToCart(product, unitCents);
     setCart(await getCart());
     setSearch("");
@@ -209,11 +249,27 @@ export function PosApp() {
       setError("You do not have permission for owner / family sales.");
       return;
     }
+    if (posMode === "sale" && discountPercent > 0) {
+      if (!can("pos:discount")) {
+        setError("You do not have permission to apply discounts.");
+        return;
+      }
+      if (discountPercent > maxDiscountPercent) {
+        setError(`Discount exceeds store maximum of ${maxDiscountPercent}%.`);
+        return;
+      }
+    }
+    const appliedDiscount = posMode === "sale" ? discountPercent : 0;
     const cartSnapshot = await getCart();
     const sale =
       posMode === "return"
         ? await completeReturn(uuid(), staff)
-        : await completeSale(uuid(), staff, posMode === "owner" ? "OWNER" : "SALE");
+        : await completeSale(
+            uuid(),
+            staff,
+            posMode === "owner" ? "OWNER" : "SALE",
+            appliedDiscount,
+          );
     if (!sale) return;
     let receiptNumber: string | null = null;
     if (isOnline()) {
@@ -230,12 +286,16 @@ export function PosApp() {
         productName: cartSnapshot.find((c) => c.productId === line.productId)?.name ?? "Item",
       })),
     });
+    setDiscountPercent(0);
+    setDiscountInput("");
     setMessage(
       posMode === "return"
         ? "Customer return recorded."
         : posMode === "owner"
           ? "Owner / family sale recorded at cost."
-          : "",
+          : appliedDiscount > 0
+            ? `Sale recorded with ${appliedDiscount}% discount.`
+            : "",
     );
     await refresh();
     if (isOnline()) {
@@ -419,6 +479,43 @@ export function PosApp() {
             )}
           </div>
           <h2>Cart</h2>
+          {canDiscount && (
+            <div className="pos-discount-row">
+              <label className="pos-discount-label">
+                Discount %
+                <span className="pos-muted"> (max {maxDiscountPercent}%)</span>
+              </label>
+              <div className="pos-discount-controls">
+                <input
+                  type="number"
+                  min={0}
+                  max={maxDiscountPercent}
+                  step={0.5}
+                  inputMode="decimal"
+                  placeholder="0"
+                  value={discountInput}
+                  onChange={(e) => setDiscountInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void applyDiscountFromInput();
+                    }
+                  }}
+                />
+                <button className="btn btn-secondary" type="button" onClick={() => void applyDiscountFromInput()}>
+                  Apply
+                </button>
+                {discountPercent > 0 && (
+                  <button className="btn btn-secondary" type="button" onClick={() => void clearDiscount()}>
+                    Clear
+                  </button>
+                )}
+              </div>
+              {discountPercent > 0 && (
+                <div className="pos-discount-active">{discountPercent}% off applied</div>
+              )}
+            </div>
+          )}
           {cart.length === 0 ? (
             <p className="pos-muted">Tap products or scan a barcode to add items.</p>
           ) : (
@@ -452,7 +549,9 @@ export function PosApp() {
                     ? "Refund total"
                     : posMode === "owner"
                       ? "Total at cost"
-                      : "Total"}
+                      : discountPercent > 0
+                        ? "Total after discount"
+                        : "Total"}
                 </span>
                 <span>{formatMoney(totalCents, storeSettings?.currency)}</span>
               </div>
@@ -472,6 +571,8 @@ export function PosApp() {
                 )}
                 <button className="btn btn-secondary" type="button" onClick={async () => {
                   await clearCart();
+                  setDiscountPercent(0);
+                  setDiscountInput("");
                   setCart(await getCart());
                 }}>
                   Clear cart

@@ -1,5 +1,6 @@
 import Dexie, { type Table } from "dexie";
 import type { ProductDto, SaleLineDto, StoreSettingsDto } from "@market/shared";
+import { discountedUnitCents } from "@market/shared";
 
 export interface CartLine {
   productId: string;
@@ -14,6 +15,7 @@ export interface SaleOutbox {
   soldAt: string;
   totalCents: number;
   kind: "SALE" | "RETURN" | "OWNER";
+  discountPercent?: number;
   lines: SaleLineDto[];
   syncStatus: "pending" | "synced" | "conflict";
   conflictJson?: string;
@@ -35,6 +37,9 @@ export interface CompletedSale {
   soldAt: string;
   totalCents: number;
   kind?: "SALE" | "RETURN" | "OWNER";
+  discountPercent?: number;
+  /** Pre-discount subtotal when a discount was applied. */
+  subtotalCents?: number;
   lines: Array<SaleLineDto & { productName?: string }>;
   staffId?: string;
   staffName?: string;
@@ -115,7 +120,20 @@ export async function getStoreSettings(): Promise<StoreSettingsDto | null> {
   const raw = await getSetting("storeSettings");
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as StoreSettingsDto;
+    const parsed = JSON.parse(raw) as Partial<StoreSettingsDto>;
+    return {
+      name: parsed.name ?? "Store",
+      address: parsed.address ?? null,
+      phone: parsed.phone ?? null,
+      currency: parsed.currency ?? "USD",
+      lowStockThreshold: parsed.lowStockThreshold ?? 10,
+      receiptHeader: parsed.receiptHeader ?? null,
+      receiptFooter: parsed.receiptFooter ?? null,
+      timezone: parsed.timezone ?? "UTC",
+      receiptPrefix: parsed.receiptPrefix ?? "RCP-",
+      receiptNextNumber: parsed.receiptNextNumber ?? 1,
+      maxDiscountPercent: parsed.maxDiscountPercent ?? 0,
+    };
   } catch {
     return null;
   }
@@ -195,18 +213,27 @@ export async function addToCart(product: ProductDto, unitCents?: number) {
 }
 
 /** Reprice entire cart to sale price or cost price (owner mode). */
-export async function repriceCart(mode: "sale" | "return" | "owner") {
+export async function repriceCart(mode: "sale" | "return" | "owner", discountPercent = 0) {
   const cart = await getCart();
   for (const line of cart) {
     const product = await posDb.products.get(line.productId);
     if (!product) continue;
-    const unitCents = mode === "owner" ? product.costCents : product.priceCents;
+    const listOrCost = mode === "owner" ? product.costCents : product.priceCents;
+    const unitCents =
+      mode === "sale" && discountPercent > 0
+        ? discountedUnitCents(product.priceCents, discountPercent)
+        : listOrCost;
     await putCartLine({
       ...line,
       unitCents,
       lineCents: line.quantity * unitCents,
     });
   }
+}
+
+/** Apply (or clear) a cart-level % discount using current list prices. Sale mode only. */
+export async function applyCartDiscount(discountPercent: number) {
+  await repriceCart("sale", discountPercent);
 }
 
 export async function incrementCartLine(productId: string) {
@@ -233,6 +260,7 @@ export async function completeSale(
   localId: string,
   staff: StaffSession,
   kind: "SALE" | "OWNER" = "SALE",
+  discountPercent = 0,
 ) {
   const cart = await getCart();
   if (cart.length === 0) return null;
@@ -246,11 +274,22 @@ export async function completeSale(
     lineCents: line.lineCents,
   }));
 
+  let subtotalCents: number | undefined;
+  if (kind === "SALE" && discountPercent > 0) {
+    let sub = 0;
+    for (const line of cart) {
+      const product = await posDb.products.get(line.productId);
+      sub += line.quantity * (product?.priceCents ?? line.unitCents);
+    }
+    subtotalCents = sub;
+  }
+
   await posDb.salesOutbox.put({
     localId,
     soldAt,
     totalCents,
     kind,
+    discountPercent: kind === "SALE" && discountPercent > 0 ? discountPercent : undefined,
     lines,
     syncStatus: "pending",
     createdAt: soldAt,
@@ -275,6 +314,8 @@ export async function completeSale(
     soldAt,
     totalCents,
     kind,
+    discountPercent: kind === "SALE" && discountPercent > 0 ? discountPercent : undefined,
+    subtotalCents,
     lines,
     staffId: staff.staffId,
     staffName: staff.staffName,

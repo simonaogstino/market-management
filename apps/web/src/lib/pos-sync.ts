@@ -76,6 +76,7 @@ export async function pushPendingSales() {
       soldAt: sale.soldAt,
       totalCents: sale.totalCents,
       kind: sale.kind ?? "SALE",
+      discountPercent: sale.discountPercent,
       lines: sale.lines,
       staffId: sale.staffId,
       staffName: sale.staffName,

@@ -34,6 +34,8 @@ export interface SalePushDto {
   soldAt: string;
   totalCents: number;
   kind?: "SALE" | "RETURN" | "OWNER";
+  /** Cart-level discount percent applied to list prices (SALE only). */
+  discountPercent?: number;
   lines: SaleLineDto[];
   staffId?: string;
   staffName?: string;
@@ -76,6 +78,15 @@ export interface StoreSettingsDto {
   timezone: string;
   receiptPrefix: string;
   receiptNextNumber: number;
+  /** Max % POS may discount (0 = no discounts). */
+  maxDiscountPercent: number;
+}
+
+/** Apply a percent-off to a list price in cents (integer-safe). */
+export function discountedUnitCents(listCents: number, percent: number) {
+  const p = Math.max(0, Math.min(100, percent));
+  if (p <= 0) return listCents;
+  return Math.round((listCents * (100 - p)) / 100);
 }
 
 export interface SyncPushRequest {

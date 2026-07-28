@@ -51,6 +51,7 @@ export async function GET(request: Request) {
       timezone: store.timezone,
       receiptPrefix: store.receiptPrefix,
       receiptNextNumber: store.receiptNextNumber,
+      maxDiscountPercent: store.maxDiscountPercent,
     },
   };
   return NextResponse.json(response);

@@ -13,6 +13,7 @@ export type StoreSettings = {
   timezone: string;
   receiptPrefix: string;
   receiptNextNumber: number;
+  maxDiscountPercent: number;
 };
 
 export const CURRENCY_OPTIONS = [
@@ -76,6 +77,7 @@ export async function getStoreSettings(storeId: string): Promise<StoreSettings> 
     timezone: store.timezone,
     receiptPrefix: store.receiptPrefix,
     receiptNextNumber: store.receiptNextNumber,
+    maxDiscountPercent: store.maxDiscountPercent,
   };
 }
 

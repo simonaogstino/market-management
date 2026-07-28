@@ -1,10 +1,12 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import type { SalePushDto, SyncPushResult } from "@market/shared";
+import { discountedUnitCents } from "@market/shared";
 import { prisma, SaleStatus } from "@market/database";
 import { authOptions } from "./auth";
 import { ensureSaleReceiptNumber } from "./assign-receipt-number";
 import { logger } from "./logger";
+import { hasPosPermission, parsePosPermissions } from "./permissions";
 
 export async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -54,6 +56,76 @@ export async function processSalePush(
     };
   }
   const conflicts: Array<{ productId: string; message: string }> = [];
+
+  const store = await prisma.store.findUniqueOrThrow({ where: { id: storeId } });
+  const maxDiscountPercent = store.maxDiscountPercent ?? 0;
+
+  let staffMayDiscount = false;
+  if (sale.staffId) {
+    const staffUser = await prisma.user.findFirst({
+      where: { id: sale.staffId, storeId },
+      select: { role: true, permissions: true },
+    });
+    if (staffUser) {
+      const perms = parsePosPermissions(staffUser.permissions);
+      staffMayDiscount = hasPosPermission(staffUser.role, perms, "pos:discount");
+    }
+  }
+
+  const claimedDiscount = Math.max(0, Math.min(100, sale.discountPercent ?? 0));
+
+  if (saleKind === "SALE") {
+    if (claimedDiscount > 0) {
+      if (!staffMayDiscount) {
+        conflicts.push({
+          productId: sale.lines[0]?.productId ?? "discount",
+          message: "Staff is not allowed to apply discounts",
+        });
+      } else if (claimedDiscount > maxDiscountPercent) {
+        conflicts.push({
+          productId: sale.lines[0]?.productId ?? "discount",
+          message: `Discount ${claimedDiscount}% exceeds store maximum of ${maxDiscountPercent}%`,
+        });
+      }
+    }
+
+    for (const line of sale.lines) {
+      const product = await prisma.product.findFirst({
+        where: { id: line.productId, storeId },
+      });
+      if (!product) continue; // stock loop below will catch missing products
+
+      const minUnit = discountedUnitCents(product.priceCents, maxDiscountPercent);
+      if (line.unitCents < minUnit) {
+        conflicts.push({
+          productId: line.productId,
+          message: `Unit price below allowed discount (min ${minUnit}¢ vs list ${product.priceCents}¢)`,
+        });
+      } else if (line.unitCents < product.priceCents) {
+        if (!staffMayDiscount || maxDiscountPercent <= 0) {
+          conflicts.push({
+            productId: line.productId,
+            message: "Discounted price not allowed for this staff / store",
+          });
+        }
+      }
+
+      if (line.lineCents !== line.quantity * line.unitCents) {
+        conflicts.push({
+          productId: line.productId,
+          message: "Line total does not match quantity × unit price",
+        });
+      }
+    }
+
+    const sumLines = sale.lines.reduce((s, l) => s + l.lineCents, 0);
+    if (sumLines !== sale.totalCents) {
+      conflicts.push({
+        productId: sale.lines[0]?.productId ?? "total",
+        message: "Sale total does not match sum of line totals",
+      });
+    }
+  }
 
   if (!isReturn) {
     for (const line of sale.lines) {

@@ -16,6 +16,7 @@ const DEFAULT_STORE: StoreSettingsDto = {
   timezone: "UTC",
   receiptPrefix: "RCP-",
   receiptNextNumber: 1,
+  maxDiscountPercent: 0,
 };
 
 function receiptTitle(kind?: string) {
@@ -90,6 +91,26 @@ export function PosReceipt({
             </div>
           ))}
           <hr />
+          {sale.kind === "SALE" && sale.discountPercent != null && sale.discountPercent > 0 && (
+            <>
+              {sale.subtotalCents != null && (
+                <div className="receipt-line">
+                  <span>Subtotal</span>
+                  <span>{formatMoney(sale.subtotalCents, currency)}</span>
+                </div>
+              )}
+              <div className="receipt-line">
+                <span>Discount ({sale.discountPercent}%)</span>
+                <span>
+                  −
+                  {formatMoney(
+                    Math.max(0, (sale.subtotalCents ?? sale.totalCents) - sale.totalCents),
+                    currency,
+                  )}
+                </span>
+              </div>
+            </>
+          )}
           <div className="receipt-total">
             <span>
               {sale.kind === "RETURN" ? "Refund" : sale.kind === "OWNER" ? "Total at cost" : "Total"}
