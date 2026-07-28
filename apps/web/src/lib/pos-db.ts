@@ -13,7 +13,7 @@ export interface SaleOutbox {
   localId: string;
   soldAt: string;
   totalCents: number;
-  kind: "SALE" | "RETURN";
+  kind: "SALE" | "RETURN" | "OWNER";
   lines: SaleLineDto[];
   syncStatus: "pending" | "synced" | "conflict";
   conflictJson?: string;
@@ -34,7 +34,7 @@ export interface CompletedSale {
   localId: string;
   soldAt: string;
   totalCents: number;
-  kind?: "SALE" | "RETURN";
+  kind?: "SALE" | "RETURN" | "OWNER";
   lines: Array<SaleLineDto & { productName?: string }>;
   staffId?: string;
   staffName?: string;
@@ -62,6 +62,12 @@ class PosDatabase extends Dexie {
       settings: "key",
     });
     this.version(3).stores({
+      products: "id, sku, name",
+      cart: "productId",
+      salesOutbox: "localId, syncStatus, voided, kind",
+      settings: "key",
+    });
+    this.version(4).stores({
       products: "id, sku, name",
       cart: "productId",
       salesOutbox: "localId, syncStatus, voided, kind",
@@ -175,16 +181,32 @@ async function putCartLine(line: CartLine) {
   });
 }
 
-export async function addToCart(product: ProductDto) {
+export async function addToCart(product: ProductDto, unitCents?: number) {
   const existing = await posDb.cart.get(product.id);
+  const price = unitCents ?? product.priceCents;
   const nextQty = (existing?.quantity ?? 0) + 1;
   await putCartLine({
     productId: product.id,
     name: product.name,
     quantity: nextQty,
-    unitCents: product.priceCents,
-    lineCents: nextQty * product.priceCents,
+    unitCents: existing ? existing.unitCents : price,
+    lineCents: nextQty * (existing ? existing.unitCents : price),
   });
+}
+
+/** Reprice entire cart to sale price or cost price (owner mode). */
+export async function repriceCart(mode: "sale" | "return" | "owner") {
+  const cart = await getCart();
+  for (const line of cart) {
+    const product = await posDb.products.get(line.productId);
+    if (!product) continue;
+    const unitCents = mode === "owner" ? product.costCents : product.priceCents;
+    await putCartLine({
+      ...line,
+      unitCents,
+      lineCents: line.quantity * unitCents,
+    });
+  }
 }
 
 export async function incrementCartLine(productId: string) {
@@ -207,7 +229,11 @@ export async function clearCart() {
   await posDb.cart.clear();
 }
 
-export async function completeSale(localId: string, staff: StaffSession) {
+export async function completeSale(
+  localId: string,
+  staff: StaffSession,
+  kind: "SALE" | "OWNER" = "SALE",
+) {
   const cart = await getCart();
   if (cart.length === 0) return null;
 
@@ -224,7 +250,7 @@ export async function completeSale(localId: string, staff: StaffSession) {
     localId,
     soldAt,
     totalCents,
-    kind: "SALE",
+    kind,
     lines,
     syncStatus: "pending",
     createdAt: soldAt,
@@ -244,7 +270,15 @@ export async function completeSale(localId: string, staff: StaffSession) {
   }
 
   await clearCart();
-  return { localId, soldAt, totalCents, kind: "SALE" as const, lines, staffId: staff.staffId, staffName: staff.staffName };
+  return {
+    localId,
+    soldAt,
+    totalCents,
+    kind,
+    lines,
+    staffId: staff.staffId,
+    staffName: staff.staffName,
+  };
 }
 
 export async function completeReturn(localId: string, staff: StaffSession) {

@@ -3,7 +3,9 @@ import { computeSupplierBalance } from "@/lib/suppliers";
 import { eachDay, type DateRange } from "./date-range";
 
 function saleSign(kind: string) {
-  return kind === "RETURN" ? -1 : 1;
+  if (kind === "RETURN") return -1;
+  if (kind === "OWNER") return 0; // excluded from retail revenue aggregates
+  return 1;
 }
 
 function activeSaleWhere(range?: DateRange) {
@@ -13,9 +15,15 @@ function activeSaleWhere(range?: DateRange) {
   };
 }
 
-async function fetchActiveSaleLines(range: DateRange) {
+/** Active sale lines for retail revenue/profit (excludes OWNER). */
+async function fetchActiveSaleLines(range: DateRange, retailOnly = true) {
   return prisma.saleLine.findMany({
-    where: { sale: activeSaleWhere(range) },
+    where: {
+      sale: {
+        ...activeSaleWhere(range),
+        ...(retailOnly ? { kind: { in: ["SALE", "RETURN"] } } : {}),
+      },
+    },
     include: {
       product: { include: { category: true, supplier: true } },
       sale: { include: { terminal: true, staff: true } },
@@ -32,12 +40,17 @@ export async function getSalesSummary(range: DateRange) {
   let saleCount = 0;
   let returnCount = 0;
   let voidedCount = 0;
+  let ownerCount = 0;
   let grossCents = 0;
   let returnsCents = 0;
+  let ownerCents = 0;
 
-  const dailyMap = new Map<string, { sales: number; returns: number; net: number }>();
+  const dailyMap = new Map<
+    string,
+    { sales: number; returns: number; owner: number; net: number }
+  >();
   for (const day of eachDay(range)) {
-    dailyMap.set(day, { sales: 0, returns: 0, net: 0 });
+    dailyMap.set(day, { sales: 0, returns: 0, owner: 0, net: 0 });
   }
 
   for (const s of sales) {
@@ -46,13 +59,17 @@ export async function getSalesSummary(range: DateRange) {
       continue;
     }
     const day = s.soldAt.toISOString().slice(0, 10);
-    const bucket = dailyMap.get(day) ?? { sales: 0, returns: 0, net: 0 };
+    const bucket = dailyMap.get(day) ?? { sales: 0, returns: 0, owner: 0, net: 0 };
 
     if (s.kind === "RETURN") {
       returnCount++;
       returnsCents += s.totalCents;
       bucket.returns += s.totalCents;
       bucket.net -= s.totalCents;
+    } else if (s.kind === "OWNER") {
+      ownerCount++;
+      ownerCents += s.totalCents;
+      bucket.owner += s.totalCents;
     } else {
       saleCount++;
       grossCents += s.totalCents;
@@ -71,8 +88,10 @@ export async function getSalesSummary(range: DateRange) {
     saleCount,
     returnCount,
     voidedCount,
+    ownerCount,
     grossCents,
     returnsCents,
+    ownerCents,
     netCents: grossCents - returnsCents,
     daily,
   };
@@ -106,7 +125,10 @@ export async function getTopProducts(range: DateRange, limit = 50) {
 
 export async function getSalesByTerminal(range: DateRange) {
   const sales = await prisma.sale.findMany({
-    where: activeSaleWhere(range),
+    where: {
+      ...activeSaleWhere(range),
+      kind: { in: ["SALE", "RETURN"] },
+    },
     include: { terminal: true },
   });
 
@@ -127,7 +149,10 @@ export async function getSalesByTerminal(range: DateRange) {
 
 export async function getSalesByCashier(range: DateRange) {
   const sales = await prisma.sale.findMany({
-    where: activeSaleWhere(range),
+    where: {
+      ...activeSaleWhere(range),
+      kind: { in: ["SALE", "RETURN"] },
+    },
     include: { staff: true },
   });
 
@@ -165,7 +190,10 @@ export async function getSalesByCategory(range: DateRange) {
 
 export async function getHourlySales(range: DateRange) {
   const sales = await prisma.sale.findMany({
-    where: activeSaleWhere(range),
+    where: {
+      ...activeSaleWhere(range),
+      kind: { in: ["SALE", "RETURN"] },
+    },
     select: { soldAt: true, kind: true, totalCents: true },
   });
 

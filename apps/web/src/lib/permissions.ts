@@ -66,6 +66,7 @@ export const POS_PERMISSION_GROUPS = [
     items: [
       { key: "pos:sell", label: "Complete sales" },
       { key: "pos:return", label: "Customer returns" },
+      { key: "pos:owner_sale", label: "Owner / family at cost" },
       { key: "pos:void", label: "Void last sale" },
     ],
   },

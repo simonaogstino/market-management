@@ -29,6 +29,7 @@ export async function processSalePush(
 ): Promise<SyncPushResult> {
   const kind = sale.kind ?? "SALE";
   const isReturn = kind === "RETURN";
+  const saleKind = kind === "RETURN" ? "RETURN" : kind === "OWNER" ? "OWNER" : "SALE";
 
   const existing = await prisma.sale.findUnique({
     where: { terminalId_localId: { terminalId, localId: sale.localId } },
@@ -91,7 +92,7 @@ export async function processSalePush(
         where: { terminalId_localId: { terminalId, localId: sale.localId } },
         update: {
           status: SaleStatus.CONFLICT,
-          kind: isReturn ? "RETURN" : "SALE",
+          kind: saleKind,
           totalCents: sale.totalCents,
           soldAt: new Date(sale.soldAt),
           staffId: sale.staffId ?? undefined,
@@ -99,7 +100,7 @@ export async function processSalePush(
         create: {
           localId: sale.localId,
           terminalId,
-          kind: isReturn ? "RETURN" : "SALE",
+          kind: saleKind,
           status: SaleStatus.CONFLICT,
           totalCents: sale.totalCents,
           soldAt: new Date(sale.soldAt),
@@ -141,7 +142,7 @@ export async function processSalePush(
       where: { terminalId_localId: { terminalId, localId: sale.localId } },
       update: {
         status: SaleStatus.SYNCED,
-        kind: isReturn ? "RETURN" : "SALE",
+        kind: saleKind,
         syncedAt: new Date(),
         totalCents: sale.totalCents,
         soldAt: new Date(sale.soldAt),
@@ -150,7 +151,7 @@ export async function processSalePush(
       create: {
         localId: sale.localId,
         terminalId,
-        kind: isReturn ? "RETURN" : "SALE",
+        kind: saleKind,
         status: SaleStatus.SYNCED,
         syncedAt: new Date(),
         totalCents: sale.totalCents,

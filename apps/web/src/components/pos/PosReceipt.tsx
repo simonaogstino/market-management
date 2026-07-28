@@ -18,6 +18,12 @@ const DEFAULT_STORE: StoreSettingsDto = {
   receiptNextNumber: 1,
 };
 
+function receiptTitle(kind?: string) {
+  if (kind === "RETURN") return "Return complete";
+  if (kind === "OWNER") return "Owner / family complete";
+  return "Sale complete";
+}
+
 export function PosReceipt({
   sale,
   terminalName,
@@ -47,7 +53,7 @@ export function PosReceipt({
   return (
     <div className="pos-modal-overlay">
       <div className="pos-modal">
-        <h2>{sale.kind === "RETURN" ? "Return complete" : "Sale complete"}</h2>
+        <h2>{receiptTitle(sale.kind)}</h2>
         <div className="pos-receipt" ref={printRef}>
           <div className="receipt-header">
             <strong>{header}</strong>
@@ -57,6 +63,11 @@ export function PosReceipt({
             {sale.kind === "RETURN" && (
               <div>
                 <strong>CUSTOMER RETURN</strong>
+              </div>
+            )}
+            {sale.kind === "OWNER" && (
+              <div>
+                <strong>OWNER / FAMILY (AT COST)</strong>
               </div>
             )}
             {sale.staffName && <div>Staff: {sale.staffName}</div>}
@@ -80,13 +91,17 @@ export function PosReceipt({
           ))}
           <hr />
           <div className="receipt-total">
-            <span>{sale.kind === "RETURN" ? "Refund" : "Total"}</span>
+            <span>
+              {sale.kind === "RETURN" ? "Refund" : sale.kind === "OWNER" ? "Total at cost" : "Total"}
+            </span>
             <strong>{formatMoney(sale.totalCents, currency)}</strong>
           </div>
           <p className="receipt-thanks">
             {sale.kind === "RETURN"
               ? "Return processed."
-              : s.receiptFooter?.trim() || "Thank you!"}
+              : sale.kind === "OWNER"
+                ? "Owner / family withdrawal at purchase price."
+                : s.receiptFooter?.trim() || "Thank you!"}
           </p>
         </div>
         <div className="pos-modal-actions">

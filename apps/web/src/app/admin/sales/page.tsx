@@ -47,9 +47,13 @@ export default async function SalesPage({
     },
   });
 
-  const totalCents = sales.reduce((sum, s) => {
-    if (s.status === "VOIDED") return sum;
+  const retailTotalCents = sales.reduce((sum, s) => {
+    if (s.status === "VOIDED" || s.kind === "OWNER") return sum;
     return sum + (s.kind === "RETURN" ? -s.totalCents : s.totalCents);
+  }, 0);
+  const ownerTotalCents = sales.reduce((sum, s) => {
+    if (s.status === "VOIDED" || s.kind !== "OWNER") return sum;
+    return sum + s.totalCents;
   }, 0);
 
   const rows: AdminSaleRow[] = sales.map((sale) => ({
@@ -114,8 +118,15 @@ export default async function SalesPage({
       )}
 
       <div className="card" style={{ marginBottom: "1rem" }}>
-        <strong>{sales.length}</strong> sale(s) · Total{" "}
-        <strong>{formatStoreMoney(totalCents, settings)}</strong>
+        <strong>{sales.length}</strong> transaction(s) · Retail{" "}
+        <strong>{formatStoreMoney(retailTotalCents, settings)}</strong>
+        {ownerTotalCents > 0 && (
+          <>
+            {" "}
+            · Owner / family{" "}
+            <strong>{formatStoreMoney(ownerTotalCents, settings)}</strong>
+          </>
+        )}
       </div>
 
       <SalesList sales={rows} currency={settings.currency} timezone={settings.timezone} />

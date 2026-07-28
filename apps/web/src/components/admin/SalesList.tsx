@@ -78,7 +78,13 @@ function SaleDetailModal({
           </div>
           <div>
             <span className="admin-modal-label">Type</span>
-            <span>{sale.kind === "RETURN" ? "Customer return" : "Sale"}</span>
+            <span>
+              {sale.kind === "RETURN"
+                ? "Customer return"
+                : sale.kind === "OWNER"
+                  ? "Owner / family (at cost)"
+                  : "Sale"}
+            </span>
           </div>
           <div>
             <span className="admin-modal-label">Status</span>
@@ -110,7 +116,13 @@ function SaleDetailModal({
         </table>
 
         <div className="admin-modal-total">
-          <span>{sale.kind === "RETURN" ? "Refund total" : "Total"}</span>
+          <span>
+            {sale.kind === "RETURN"
+              ? "Refund total"
+              : sale.kind === "OWNER"
+                ? "Total at cost"
+                : "Total"}
+          </span>
           <strong>
             {sale.kind === "RETURN" ? "−" : ""}
             {formatMoney(sale.totalCents, currency)}
@@ -201,6 +213,7 @@ export function SalesList({
                 </td>
                 <td>
                   {sale.kind === "RETURN" && <span className="badge">Return</span>}{" "}
+                  {sale.kind === "OWNER" && <span className="badge badge-warning">Owner / family</span>}{" "}
                   <SaleStatusBadge status={sale.status} />
                 </td>
               </tr>

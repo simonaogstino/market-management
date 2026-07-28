@@ -33,11 +33,15 @@ export default async function AdminDashboardPage() {
     }),
   ]);
 
-  const todaySales = todaySalesRows.length;
-  const todayNetCents = todaySalesRows.reduce(
+  const todayRetail = todaySalesRows.filter((s) => s.kind !== "OWNER");
+  const todaySales = todayRetail.length;
+  const todayNetCents = todayRetail.reduce(
     (sum, s) => sum + (s.kind === "RETURN" ? -s.totalCents : s.totalCents),
     0,
   );
+  const todayOwnerCents = todaySalesRows
+    .filter((s) => s.kind === "OWNER")
+    .reduce((sum, s) => sum + s.totalCents, 0);
 
   const lowStock = await prisma.product.findMany({
     where: { stockQty: { lte: settings.lowStockThreshold }, isActive: true },
@@ -65,10 +69,16 @@ export default async function AdminDashboardPage() {
       <section className="card" style={{ marginBottom: "1.5rem" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <h2 style={{ margin: "0 0 0.25rem", fontSize: "1.125rem" }}>Today&apos;s revenue</h2>
+            <h2 style={{ margin: "0 0 0.25rem", fontSize: "1.125rem" }}>Today&apos;s retail revenue</h2>
             <p style={{ margin: 0, fontSize: "1.5rem", fontWeight: 700 }}>
               {formatStoreMoney(todayNetCents, settings)}
-            </p>          </div>
+            </p>
+            {todayOwnerCents > 0 && (
+              <p style={{ margin: "0.35rem 0 0", color: "var(--muted)", fontSize: "0.875rem" }}>
+                Owner / family at cost: {formatStoreMoney(todayOwnerCents, settings)}
+              </p>
+            )}
+          </div>
           <Link className="btn btn-secondary" href="/admin/sales">
             View sales
           </Link>

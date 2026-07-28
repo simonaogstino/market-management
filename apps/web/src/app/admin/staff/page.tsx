@@ -8,6 +8,7 @@ import { parsePosPermissions } from "@/lib/permissions";
 const PERM_LABELS: Record<string, string> = {
   "pos:sell": "Sell",
   "pos:return": "Return",
+  "pos:owner_sale": "Owner/family",
   "pos:void": "Void",
   "pos:receive_stock": "Receive",
   "pos:supplier_return": "Supplier return",

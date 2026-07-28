@@ -49,19 +49,25 @@ export async function renderReport(
         content: (
           <>
             <StatGrid>
-              <StatCard label="Net revenue" value={fmt(data.netCents)} />
+              <StatCard label="Net revenue (retail)" value={fmt(data.netCents)} />
               <StatCard label="Gross sales" value={fmt(data.grossCents)} />
               <StatCard label="Returns" value={fmt(data.returnsCents)} highlight={data.returnsCents > 0} />
-              <StatCard label="Transactions" value={String(data.saleCount)} sub={`${data.returnCount} returns`} />
+              <StatCard
+                label="Owner / family at cost"
+                value={fmt(data.ownerCents)}
+                sub={`${data.ownerCount} txn`}
+              />
+              <StatCard label="Retail transactions" value={String(data.saleCount)} sub={`${data.returnCount} returns`} />
               <StatCard label="Voided" value={String(data.voidedCount)} highlight={data.voidedCount > 0} />
             </StatGrid>
             <h2 className="report-section-title">Daily breakdown</h2>
             <ReportTable
-              headers={["Date", "Sales", "Returns", "Net"]}
+              headers={["Date", "Sales", "Returns", "Owner / family", "Net (retail)"]}
               rows={data.daily.map((d) => [
                 d.date,
                 fmt(d.sales),
                 d.returns > 0 ? `−${fmt(d.returns)}` : fmt(0),
+                fmt(d.owner),
                 fmt(d.net),
               ])}
             />
@@ -69,11 +75,12 @@ export async function renderReport(
         ),
         csv: {
           filename: "sales-summary.csv",
-          headers: ["Date", "Sales", "Returns", "Net"],
+          headers: ["Date", "Sales", "Returns", "Owner family", "Net retail"],
           rows: data.daily.map((d) => [
             d.date,
             (d.sales / 100).toFixed(2),
             (d.returns / 100).toFixed(2),
+            (d.owner / 100).toFixed(2),
             (d.net / 100).toFixed(2),
           ]),
         },
@@ -277,13 +284,19 @@ export async function renderReport(
             <div className="card report-daily-close-banner">
               <h2 style={{ margin: 0 }}>Daily close — {formatDateInput(range.from)}</h2>
               <p style={{ margin: "0.5rem 0 0", fontSize: "1.75rem", fontWeight: 700 }}>
-                Net revenue: {fmt(data.summary.netCents)}
+                Net retail revenue: {fmt(data.summary.netCents)}
               </p>
+              {data.summary.ownerCents > 0 && (
+                <p style={{ margin: "0.35rem 0 0", color: "var(--muted)" }}>
+                  Owner / family at cost: {fmt(data.summary.ownerCents)} ({data.summary.ownerCount} txn)
+                </p>
+              )}
             </div>
             <StatGrid>
-              <StatCard label="Transactions" value={String(data.summary.saleCount)} />
+              <StatCard label="Retail transactions" value={String(data.summary.saleCount)} />
               <StatCard label="Returns" value={String(data.summary.returnCount)} />
               <StatCard label="Gross sales" value={fmt(data.summary.grossCents)} />
+              <StatCard label="Owner / family" value={fmt(data.summary.ownerCents)} />
               <StatCard label="Voided" value={String(data.summary.voidedCount)} />
             </StatGrid>
             <h2 className="report-section-title">Top products</h2>

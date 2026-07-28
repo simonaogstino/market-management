@@ -21,6 +21,7 @@ import {
   removeFromCart,
   clearStaffSession,
   getStoreSettings,
+  repriceCart,
   type CartLine,
   type CompletedSale,
   type StaffSession,
@@ -50,7 +51,7 @@ export function PosApp() {
   const [showSync, setShowSync] = useState(false);
   const [showReceive, setShowReceive] = useState(false);
   const [showSupplierReturn, setShowSupplierReturn] = useState(false);
-  const [posMode, setPosMode] = useState<"sale" | "return">("sale");
+  const [posMode, setPosMode] = useState<"sale" | "return" | "owner">("sale");
   const [suppliers, setSuppliers] = useState<Array<{ id: string; name: string }>>([]);
   const [search, setSearch] = useState("");
   const [receipt, setReceipt] = useState<CompletedSale | null>(null);
@@ -69,7 +70,14 @@ export function PosApp() {
     if (!staff) return;
     if (can("pos:sell")) setPosMode("sale");
     else if (can("pos:return")) setPosMode("return");
+    else if (can("pos:owner_sale")) setPosMode("owner");
   }, [staff?.staffId, staff?.permissions?.join(",")]);
+
+  async function switchMode(next: "sale" | "return" | "owner") {
+    setPosMode(next);
+    await repriceCart(next);
+    setCart(await getCart());
+  }
 
   function findProductByCode(code: string) {
     const normalized = code.trim().toLowerCase();
@@ -178,7 +186,8 @@ export function PosApp() {
   }, [products, search]);
 
   async function handleAdd(product: ProductDto) {
-    await addToCart(product);
+    const unitCents = posMode === "owner" ? product.costCents : product.priceCents;
+    await addToCart(product, unitCents);
     setCart(await getCart());
     setSearch("");
     if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
@@ -196,10 +205,15 @@ export function PosApp() {
       setError("You do not have permission to complete sales.");
       return;
     }
+    if (posMode === "owner" && !can("pos:owner_sale")) {
+      setError("You do not have permission for owner / family sales.");
+      return;
+    }
     const cartSnapshot = await getCart();
-    const sale = posMode === "return"
-      ? await completeReturn(uuid(), staff)
-      : await completeSale(uuid(), staff);
+    const sale =
+      posMode === "return"
+        ? await completeReturn(uuid(), staff)
+        : await completeSale(uuid(), staff, posMode === "owner" ? "OWNER" : "SALE");
     if (!sale) return;
     let receiptNumber: string | null = null;
     if (isOnline()) {
@@ -209,14 +223,20 @@ export function PosApp() {
     }
     setReceipt({
       ...sale,
-      kind: posMode === "return" ? "RETURN" : "SALE",
+      kind: posMode === "return" ? "RETURN" : posMode === "owner" ? "OWNER" : "SALE",
       receiptNumber,
       lines: sale.lines.map((line) => ({
         ...line,
         productName: cartSnapshot.find((c) => c.productId === line.productId)?.name ?? "Item",
       })),
     });
-    setMessage(posMode === "return" ? "Customer return recorded." : "");
+    setMessage(
+      posMode === "return"
+        ? "Customer return recorded."
+        : posMode === "owner"
+          ? "Owner / family sale recorded at cost."
+          : "",
+    );
     await refresh();
     if (isOnline()) {
       await pushPendingSales();
@@ -348,7 +368,17 @@ export function PosApp() {
               <button key={product.id} className="pos-product-card" onClick={() => handleAdd(product)}>
                 <div className="pos-product-name">{product.name}</div>
                 <div className="pos-muted">{product.sku}</div>
-                <div className="pos-price">{formatMoney(product.priceCents, storeSettings?.currency)}</div>
+                <div className="pos-price">
+                  {formatMoney(
+                    posMode === "owner" ? product.costCents : product.priceCents,
+                    storeSettings?.currency,
+                  )}
+                  {posMode === "owner" && (
+                    <span className="pos-muted" style={{ display: "block", fontSize: "0.7rem" }}>
+                      at cost
+                    </span>
+                  )}
+                </div>
                 <div className="pos-stock">Stock: {product.stockQty}</div>
               </button>
             ))}
@@ -359,12 +389,12 @@ export function PosApp() {
         </section>
 
         <section className="pos-panel">
-          <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem" }}>
+          <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem", flexWrap: "wrap" }}>
             {can("pos:sell") && (
               <button
                 type="button"
                 className={posMode === "sale" ? "btn" : "btn btn-secondary"}
-                onClick={() => setPosMode("sale")}
+                onClick={() => void switchMode("sale")}
               >
                 Sale
               </button>
@@ -373,9 +403,18 @@ export function PosApp() {
               <button
                 type="button"
                 className={posMode === "return" ? "btn" : "btn btn-secondary"}
-                onClick={() => setPosMode("return")}
+                onClick={() => void switchMode("return")}
               >
                 Customer return
+              </button>
+            )}
+            {can("pos:owner_sale") && (
+              <button
+                type="button"
+                className={posMode === "owner" ? "btn" : "btn btn-secondary"}
+                onClick={() => void switchMode("owner")}
+              >
+                Owner / family
               </button>
             )}
           </div>
@@ -408,13 +447,27 @@ export function PosApp() {
                 </div>
               ))}
               <div className="pos-total">
-                <span>{posMode === "return" ? "Refund total" : "Total"}</span>
+                <span>
+                  {posMode === "return"
+                    ? "Refund total"
+                    : posMode === "owner"
+                      ? "Total at cost"
+                      : "Total"}
+                </span>
                 <span>{formatMoney(totalCents, storeSettings?.currency)}</span>
               </div>
               <div className="pos-actions">
-                {(posMode === "sale" ? can("pos:sell") : can("pos:return")) && (
+                {(posMode === "sale"
+                  ? can("pos:sell")
+                  : posMode === "return"
+                    ? can("pos:return")
+                    : can("pos:owner_sale")) && (
                   <button className="btn" type="button" onClick={handleCheckout}>
-                    {posMode === "return" ? "Complete return" : "Complete sale"}
+                    {posMode === "return"
+                      ? "Complete return"
+                      : posMode === "owner"
+                        ? "Complete owner / family"
+                        : "Complete sale"}
                   </button>
                 )}
                 <button className="btn btn-secondary" type="button" onClick={async () => {

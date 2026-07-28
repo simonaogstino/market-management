@@ -25,6 +25,7 @@ enum SaleStatus {
 enum SaleKind {
   SALE
   RETURN
+  OWNER
 }
 
 enum SyncConflictStatus {

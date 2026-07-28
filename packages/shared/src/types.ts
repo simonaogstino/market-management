@@ -33,7 +33,7 @@ export interface SalePushDto {
   localId: string;
   soldAt: string;
   totalCents: number;
-  kind?: "SALE" | "RETURN";
+  kind?: "SALE" | "RETURN" | "OWNER";
   lines: SaleLineDto[];
   staffId?: string;
   staffName?: string;
