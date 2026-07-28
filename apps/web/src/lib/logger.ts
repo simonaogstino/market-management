@@ -1,5 +1,6 @@
-import { appendFileSync, existsSync, mkdirSync, renameSync, statSync } from "node:fs";
-import { join } from "node:path";
+import "server-only";
+import { appendFileSync, existsSync, mkdirSync, renameSync, statSync } from "fs";
+import { join } from "path";
 
 export type LogLevel = "info" | "warn" | "error";
 
@@ -52,8 +53,6 @@ function formatLine(level: LogLevel, message: string, meta?: unknown) {
 }
 
 function write(level: LogLevel, message: string, meta?: unknown) {
-  if (typeof window !== "undefined") return;
-
   const line = formatLine(level, message, meta);
   const consoleFn = level === "error" ? console.error : level === "warn" ? console.warn : console.log;
   consoleFn(line.trimEnd());
