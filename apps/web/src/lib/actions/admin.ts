@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { hash, compare } from "bcryptjs";
 import { prisma } from "@/lib/db";
-import { ALL_PERMISSIONS } from "@/lib/permissions";
+import { ALL_PERMISSIONS, ALL_POS_PERMISSIONS, DEFAULT_POS_PERMISSIONS } from "@/lib/permissions";
 import {
   requireAdminRole,
   requireAdminSession,
@@ -12,6 +12,11 @@ import {
 
 function permissionsFromForm(formData: FormData) {
   return ALL_PERMISSIONS.filter((key) => formData.get(`perm_${key}`) === "on");
+}
+
+function posPermissionsFromForm(formData: FormData) {
+  const selected = ALL_POS_PERMISSIONS.filter((key) => formData.get(`perm_${key}`) === "on");
+  return selected.length > 0 ? selected : [...DEFAULT_POS_PERMISSIONS];
 }
 
 function validatePin(pin: string) {
@@ -295,6 +300,7 @@ export async function createStaff(formData: FormData) {
       pinHash,
       role: "STAFF",
       isActive: true,
+      permissions: JSON.stringify(posPermissionsFromForm(formData)),
       storeId: session.user.storeId,
     },
   });
@@ -325,10 +331,17 @@ export async function updateStaff(userId: string, formData: FormData) {
     if (duplicateEmail) return { error: "Email is already in use." };
   }
 
-  const data: { name: string; email: string | null; isActive: boolean; pinHash?: string } = {
+  const data: {
+    name: string;
+    email: string | null;
+    isActive: boolean;
+    permissions: string;
+    pinHash?: string;
+  } = {
     name,
     email,
     isActive,
+    permissions: JSON.stringify(posPermissionsFromForm(formData)),
   };
 
   if (pin) {

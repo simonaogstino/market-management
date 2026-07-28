@@ -1,4 +1,10 @@
-import type { PosSyncStatusResponse, SyncPullResponse, SyncPushRequest, SyncPushResponse } from "@market/shared";
+import type {
+  PosSyncStatusResponse,
+  StaffLoginResponse,
+  SyncPullResponse,
+  SyncPushRequest,
+  SyncPushResponse,
+} from "@market/shared";
 import {
   getConflictSales,
   getPendingSales,
@@ -36,7 +42,7 @@ async function apiFetch(path: string, init?: RequestInit) {
   return response;
 }
 
-export async function loginStaff(pin: string) {
+export async function loginStaff(pin: string): Promise<StaffLoginResponse> {
   const response = await apiFetch("/api/pos/staff/login", {
     method: "POST",
     body: JSON.stringify({ pin }),
@@ -141,7 +147,7 @@ export async function getLocalSyncSummary() {
   };
 }
 
-export async function voidLastSale() {
+export async function voidLastSale(staffId: string) {
   const last = await getLastVoidableSale();
   if (!last) throw new Error("No sale to void.");
 
@@ -154,7 +160,7 @@ export async function voidLastSale() {
     if (!isOnline()) throw new Error("Go online to void a synced sale.");
     await apiFetch("/api/pos/sales/void", {
       method: "POST",
-      body: JSON.stringify({ localId: last.localId }),
+      body: JSON.stringify({ localId: last.localId, staffId }),
     });
     await pullCatalog();
   }

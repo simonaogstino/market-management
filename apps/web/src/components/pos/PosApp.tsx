@@ -26,6 +26,7 @@ import {
   type StaffSession,
 } from "@/lib/pos-db";
 import { isOnline, pullCatalog, pushPendingSales, runSyncCycle, voidLastSale, receiveStock } from "@/lib/pos-sync";
+import { DEFAULT_POS_PERMISSIONS, hasPosPermission, type PosPermission } from "@/lib/permissions";
 import { PosSetup } from "./PosSetup";
 import { PosStaffLogin } from "./PosStaffLogin";
 import { PosReceipt } from "./PosReceipt";
@@ -56,6 +57,19 @@ export function PosApp() {
   const [storeSettings, setStoreSettings] = useState<StoreSettingsDto | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function can(permission: PosPermission) {
+    if (!staff) return false;
+    const perms =
+      staff.permissions?.length > 0 ? staff.permissions : [...DEFAULT_POS_PERMISSIONS];
+    return hasPosPermission("STAFF", perms, permission);
+  }
+
+  useEffect(() => {
+    if (!staff) return;
+    if (can("pos:sell")) setPosMode("sale");
+    else if (can("pos:return")) setPosMode("return");
+  }, [staff?.staffId, staff?.permissions?.join(",")]);
 
   function findProductByCode(code: string) {
     const normalized = code.trim().toLowerCase();
@@ -174,6 +188,14 @@ export function PosApp() {
   async function handleCheckout() {
     if (!staff) return;
     setError("");
+    if (posMode === "return" && !can("pos:return")) {
+      setError("You do not have permission for customer returns.");
+      return;
+    }
+    if (posMode === "sale" && !can("pos:sell")) {
+      setError("You do not have permission to complete sales.");
+      return;
+    }
     const cartSnapshot = await getCart();
     const sale = posMode === "return"
       ? await completeReturn(uuid(), staff)
@@ -204,9 +226,13 @@ export function PosApp() {
   }
 
   async function handleVoid() {
+    if (!staff || !can("pos:void")) {
+      setError("You do not have permission to void sales.");
+      return;
+    }
     setError("");
     try {
-      await voidLastSale();
+      await voidLastSale(staff.staffId);
       setMessage("Last sale voided.");
       await refresh();
       if (isOnline()) await pullCatalog();
@@ -253,25 +279,31 @@ export function PosApp() {
           {pendingCount > 0 && (
             <span className="badge badge-warning">{pendingCount} pending</span>
           )}
-          {conflictCount > 0 && (
+          {conflictCount > 0 && can("pos:view_sync") && (
             <button type="button" className="badge badge-danger pos-badge-btn" onClick={() => setShowSync(true)}>
               {conflictCount} conflict{conflictCount > 1 ? "s" : ""}
             </button>
           )}
-          <button className="btn btn-secondary" type="button" onClick={() => setShowReceive(true)}>
-            Receive stock
-          </button>
-          <button
-            className="btn btn-secondary"
-            type="button"
-            onClick={() => setShowSupplierReturn(true)}
-            disabled={suppliers.length === 0}
-          >
-            Return to supplier
-          </button>
-          <button className="btn btn-secondary" type="button" onClick={() => setShowSync(true)}>
-            Sync
-          </button>
+          {can("pos:receive_stock") && (
+            <button className="btn btn-secondary" type="button" onClick={() => setShowReceive(true)}>
+              Receive stock
+            </button>
+          )}
+          {can("pos:supplier_return") && (
+            <button
+              className="btn btn-secondary"
+              type="button"
+              onClick={() => setShowSupplierReturn(true)}
+              disabled={suppliers.length === 0}
+            >
+              Return to supplier
+            </button>
+          )}
+          {can("pos:view_sync") && (
+            <button className="btn btn-secondary" type="button" onClick={() => setShowSync(true)}>
+              Sync
+            </button>
+          )}
           <button className="btn btn-secondary" type="button" onClick={handleStaffLogout}>
             Log out
           </button>
@@ -328,20 +360,24 @@ export function PosApp() {
 
         <section className="pos-panel">
           <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem" }}>
-            <button
-              type="button"
-              className={posMode === "sale" ? "btn" : "btn btn-secondary"}
-              onClick={() => setPosMode("sale")}
-            >
-              Sale
-            </button>
-            <button
-              type="button"
-              className={posMode === "return" ? "btn" : "btn btn-secondary"}
-              onClick={() => setPosMode("return")}
-            >
-              Customer return
-            </button>
+            {can("pos:sell") && (
+              <button
+                type="button"
+                className={posMode === "sale" ? "btn" : "btn btn-secondary"}
+                onClick={() => setPosMode("sale")}
+              >
+                Sale
+              </button>
+            )}
+            {can("pos:return") && (
+              <button
+                type="button"
+                className={posMode === "return" ? "btn" : "btn btn-secondary"}
+                onClick={() => setPosMode("return")}
+              >
+                Customer return
+              </button>
+            )}
           </div>
           <h2>Cart</h2>
           {cart.length === 0 ? (
@@ -376,18 +412,22 @@ export function PosApp() {
                 <span>{formatMoney(totalCents, storeSettings?.currency)}</span>
               </div>
               <div className="pos-actions">
-                <button className="btn" type="button" onClick={handleCheckout}>
-                  {posMode === "return" ? "Complete return" : "Complete sale"}
-                </button>
+                {(posMode === "sale" ? can("pos:sell") : can("pos:return")) && (
+                  <button className="btn" type="button" onClick={handleCheckout}>
+                    {posMode === "return" ? "Complete return" : "Complete sale"}
+                  </button>
+                )}
                 <button className="btn btn-secondary" type="button" onClick={async () => {
                   await clearCart();
                   setCart(await getCart());
                 }}>
                   Clear cart
                 </button>
-                <button className="btn btn-secondary" type="button" onClick={handleVoid}>
-                  Void last sale
-                </button>
+                {can("pos:void") && (
+                  <button className="btn btn-secondary" type="button" onClick={handleVoid}>
+                    Void last sale
+                  </button>
+                )}
               </div>
             </>
           )}
@@ -402,8 +442,7 @@ export function PosApp() {
           onClose={() => setReceipt(null)}
         />
       )}
-      <PosSyncPanel open={showSync} onClose={() => setShowSync(false)} onChanged={refresh} />
-      {showReceive && staff && (
+      {showReceive && staff && can("pos:receive_stock") && (
         <PosReceiveStock
           staff={staff}
           products={products}
@@ -415,7 +454,7 @@ export function PosApp() {
           }}
         />
       )}
-      {showSupplierReturn && staff && (
+      {showSupplierReturn && staff && can("pos:supplier_return") && (
         <PosSupplierReturn
           staff={staff}
           products={products}
@@ -427,6 +466,9 @@ export function PosApp() {
             await refresh();
           }}
         />
+      )}
+      {showSync && can("pos:view_sync") && (
+        <PosSyncPanel open={showSync} onClose={() => setShowSync(false)} onChanged={refresh} />
       )}
     </div>
   );

@@ -3,6 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createStaff, updateStaff } from "@/lib/actions/admin";
+import {
+  DEFAULT_POS_PERMISSIONS,
+  POS_PERMISSION_GROUPS,
+  parsePosPermissions,
+} from "@/lib/permissions";
 
 interface StaffUser {
   id: string;
@@ -10,12 +15,16 @@ interface StaffUser {
   email: string | null;
   isActive: boolean;
   pinHash: string | null;
+  permissions: string | null;
 }
 
 export function StaffForm({ staff }: { staff?: StaffUser }) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const existingPerms = staff
+    ? parsePosPermissions(staff.permissions)
+    : [...DEFAULT_POS_PERMISSIONS];
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -48,7 +57,7 @@ export function StaffForm({ staff }: { staff?: StaffUser }) {
           name="email"
           type="email"
           defaultValue={staff?.email ?? ""}
-          placeholder="Only if they need admin web access"
+          placeholder="Optional"
         />
       </label>
       <label>
@@ -68,6 +77,31 @@ export function StaffForm({ staff }: { staff?: StaffUser }) {
           </span>
         )}
       </label>
+
+      <fieldset className="permissions-fieldset">
+        <legend>POS privileges</legend>
+        <p style={{ color: "var(--muted)", fontSize: "0.875rem", margin: "0 0 0.75rem" }}>
+          Default for new cashiers is sell + customer return. Uncheck anything they should not do.
+        </p>
+        {POS_PERMISSION_GROUPS.map((group) => (
+          <div key={group.label} className="permission-group">
+            <strong>{group.label}</strong>
+            <div className="permission-checks">
+              {group.items.map((item) => (
+                <label key={item.key} className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    name={`perm_${item.key}`}
+                    defaultChecked={existingPerms.includes(item.key)}
+                  />
+                  {item.label}
+                </label>
+              ))}
+            </div>
+          </div>
+        ))}
+      </fieldset>
+
       {staff && (
         <label className="checkbox-label">
           <input type="checkbox" name="isActive" defaultChecked={staff.isActive} />

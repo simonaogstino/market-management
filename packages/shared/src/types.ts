@@ -42,6 +42,7 @@ export interface SalePushDto {
 export interface StaffLoginResponse {
   staffId: string;
   staffName: string;
+  permissions: string[];
 }
 
 export interface PosSyncStatusResponse {

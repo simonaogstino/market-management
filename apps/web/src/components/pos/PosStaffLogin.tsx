@@ -15,7 +15,11 @@ export function PosStaffLogin({ onLoggedIn }: { onLoggedIn: () => void }) {
     setError("");
     try {
       const data = await loginStaff(nextPin);
-      await saveStaffSession({ staffId: data.staffId, staffName: data.staffName });
+      await saveStaffSession({
+        staffId: data.staffId,
+        staffName: data.staffName,
+        permissions: data.permissions ?? [],
+      });
       onLoggedIn();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invalid PIN");

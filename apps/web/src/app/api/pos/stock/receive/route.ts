@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { authenticateTerminal, receiveStockForTerminal, unauthorized } from "@/lib/sync";
+import { requirePosStaffPermission } from "@/lib/pos-permissions";
 
 export async function POST(request: Request) {
   const terminal = await authenticateTerminal(request);
@@ -15,6 +16,11 @@ export async function POST(request: Request) {
 
   if (!staffId) {
     return NextResponse.json({ error: "staffId is required." }, { status: 400 });
+  }
+
+  const auth = await requirePosStaffPermission(terminal.storeId, staffId, "pos:receive_stock");
+  if ("error" in auth) {
+    return NextResponse.json({ error: auth.error }, { status: 403 });
   }
 
   if (!productId && sku) {

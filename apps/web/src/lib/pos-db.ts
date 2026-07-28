@@ -27,6 +27,7 @@ export interface SaleOutbox {
 export interface StaffSession {
   staffId: string;
   staffName: string;
+  permissions: string[];
 }
 
 export interface CompletedSale {
@@ -118,17 +119,29 @@ export async function getStaffSession(): Promise<StaffSession | null> {
   const staffId = await getSetting("staffId");
   const staffName = await getSetting("staffName");
   if (!staffId || !staffName) return null;
-  return { staffId, staffName };
+  const rawPerms = await getSetting("staffPermissions");
+  let permissions: string[] = [];
+  if (rawPerms) {
+    try {
+      const parsed = JSON.parse(rawPerms);
+      if (Array.isArray(parsed)) permissions = parsed.filter((p) => typeof p === "string");
+    } catch {
+      permissions = [];
+    }
+  }
+  return { staffId, staffName, permissions };
 }
 
 export async function saveStaffSession(session: StaffSession) {
   await setSetting("staffId", session.staffId);
   await setSetting("staffName", session.staffName);
+  await setSetting("staffPermissions", JSON.stringify(session.permissions ?? []));
 }
 
 export async function clearStaffSession() {
   await posDb.settings.delete("staffId");
   await posDb.settings.delete("staffName");
+  await posDb.settings.delete("staffPermissions");
 }
 
 export async function getLastSyncAt() {

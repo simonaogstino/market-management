@@ -59,6 +59,38 @@ export const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap((g) =>
 
 export type Permission = (typeof ALL_PERMISSIONS)[number];
 
+/** POS cashier privileges (stored on STAFF users via `permissions` JSON). */
+export const POS_PERMISSION_GROUPS = [
+  {
+    label: "Sales",
+    items: [
+      { key: "pos:sell", label: "Complete sales" },
+      { key: "pos:return", label: "Customer returns" },
+      { key: "pos:void", label: "Void last sale" },
+    ],
+  },
+  {
+    label: "Stock & suppliers",
+    items: [
+      { key: "pos:receive_stock", label: "Receive stock" },
+      { key: "pos:supplier_return", label: "Return to supplier" },
+    ],
+  },
+  {
+    label: "Other",
+    items: [{ key: "pos:view_sync", label: "View sync & conflicts" }],
+  },
+] as const;
+
+export const ALL_POS_PERMISSIONS = POS_PERMISSION_GROUPS.flatMap((g) =>
+  g.items.map((i) => i.key),
+);
+
+export type PosPermission = (typeof ALL_POS_PERMISSIONS)[number];
+
+/** Default for new cashiers: sell + customer return. */
+export const DEFAULT_POS_PERMISSIONS: PosPermission[] = ["pos:sell", "pos:return"];
+
 export function parsePermissions(json: string | null | undefined): string[] {
   if (!json) return [];
   try {
@@ -66,6 +98,20 @@ export function parsePermissions(json: string | null | undefined): string[] {
     return Array.isArray(parsed) ? parsed.filter((p) => ALL_PERMISSIONS.includes(p)) : [];
   } catch {
     return [];
+  }
+}
+
+export function parsePosPermissions(json: string | null | undefined): PosPermission[] {
+  if (!json) return [...DEFAULT_POS_PERMISSIONS];
+  try {
+    const parsed = JSON.parse(json);
+    if (!Array.isArray(parsed)) return [...DEFAULT_POS_PERMISSIONS];
+    const filtered = parsed.filter((p): p is PosPermission =>
+      (ALL_POS_PERMISSIONS as readonly string[]).includes(p),
+    );
+    return filtered.length > 0 ? filtered : [...DEFAULT_POS_PERMISSIONS];
+  } catch {
+    return [...DEFAULT_POS_PERMISSIONS];
   }
 }
 
@@ -77,6 +123,15 @@ export function hasPermission(
   if (role === "ADMIN") return true;
   if (role === "OFFICE") return permissions.includes(required);
   return false;
+}
+
+export function hasPosPermission(
+  role: string,
+  permissions: string[],
+  required: PosPermission,
+): boolean {
+  if (role === "ADMIN") return true;
+  return permissions.includes(required);
 }
 
 export const NAV_ITEMS: Array<{

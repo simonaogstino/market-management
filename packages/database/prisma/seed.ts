@@ -170,6 +170,7 @@ async function seedSuppliers(storeId: string) {
 }
 
 async function seedStaff(storeId: string, passwordHash: string) {
+  const defaultPosPerms = JSON.stringify(["pos:sell", "pos:return"]);
   const staff = [
     { id: "seed-staff-alice", name: "Alice", pin: "111111" },
     { id: "seed-staff-bob", name: "Bob", pin: "222222" },
@@ -179,7 +180,12 @@ async function seedStaff(storeId: string, passwordHash: string) {
     const pinHash = await hash(s.pin, 10);
     await prisma.user.upsert({
       where: { id: s.id },
-      update: { pinHash, name: s.name, isActive: true },
+      update: {
+        pinHash,
+        name: s.name,
+        isActive: true,
+        permissions: defaultPosPerms,
+      },
       create: {
         id: s.id,
         email: null,
@@ -188,6 +194,7 @@ async function seedStaff(storeId: string, passwordHash: string) {
         pinHash,
         role: Role.STAFF,
         isActive: true,
+        permissions: defaultPosPerms,
         storeId,
       },
     });

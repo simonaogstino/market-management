@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { authenticateTerminal, unauthorized } from "@/lib/sync";
 import { processSupplierReturn } from "@/lib/supplier-returns";
+import { requirePosStaffPermission } from "@/lib/pos-permissions";
 
 export async function POST(request: Request) {
   const terminal = await authenticateTerminal(request);
@@ -19,17 +20,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Staff, supplier, and lines are required." }, { status: 400 });
   }
 
-  const staff = await prisma.user.findFirst({
-    where: {
-      id: body.staffId,
-      storeId: terminal.storeId,
-      role: { in: ["STAFF", "ADMIN"] },
-      isActive: true,
-    },
-  });
-  if (!staff) {
-    return NextResponse.json({ error: "Invalid staff." }, { status: 401 });
+  const auth = await requirePosStaffPermission(
+    terminal.storeId,
+    body.staffId,
+    "pos:supplier_return",
+  );
+  if ("error" in auth) {
+    return NextResponse.json({ error: auth.error }, { status: 403 });
   }
+
+  const staff = auth.staff;
 
   const productLines = [];
   for (const line of body.lines) {
