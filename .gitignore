@@ -3,6 +3,8 @@ dist
 .next
 .turbo
 *.log
+logs/*
+!logs/.gitkeep
 .env
 .env.local
 .env.*.local

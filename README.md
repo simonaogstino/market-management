@@ -83,9 +83,23 @@ After adding secrets, **redeploy** the app.
 
 ---
 
+## Logs
+
+Server logs are written under the repo **`logs/`** folder (or `LOG_DIR` if set):
+
+| File | Contents |
+|------|----------|
+| `logs/app.log` | Info, warnings, and errors |
+| `logs/error.log` | Errors only |
+
+Files rotate automatically around 5 MB. Also still printed to the terminal / hosting console.
+
+---
+
 ## Project layout
 
 | Path | Purpose |
 |------|---------|
 | `apps/web` | Admin + POS + API (all web) |
 | `packages/database` | Database schema (SQLite file: `packages/database/prisma/dev.db`) |
+| `logs/` | Runtime `app.log` and `error.log` (not committed) |

@@ -4,6 +4,8 @@ import type { SalePushDto, SyncPushResult } from "@market/shared";
 import { prisma, SaleStatus } from "@market/database";
 import { authOptions } from "./auth";
 import { ensureSaleReceiptNumber } from "./assign-receipt-number";
+import { logger } from "./logger";
+
 export async function requireAdmin() {
   const session = await getServerSession(authOptions);
   if (!session?.user || session.user.role !== "ADMIN") {
@@ -128,6 +130,14 @@ export async function processSalePush(
       });
 
       return tx.sale.findUniqueOrThrow({ where: { id: created.id } });
+    });
+
+    logger.warn("Sale sync conflict", {
+      localId: sale.localId,
+      terminalId,
+      kind: saleKind,
+      conflicts,
+      receiptNumber: conflictSale.receiptNumber,
     });
 
     return {

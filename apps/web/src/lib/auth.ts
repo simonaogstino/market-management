@@ -2,12 +2,26 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { compare } from "bcryptjs";
 import { prisma } from "./db";
+import { logger } from "./logger";
 import { parsePermissions } from "./permissions";
 
 export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET,
   session: { strategy: "jwt" },
   pages: { signIn: "/login" },
+  logger: {
+    error(code, metadata) {
+      logger.error(`NextAuth: ${code}`, metadata);
+    },
+    warn(code) {
+      logger.warn(`NextAuth: ${code}`);
+    },
+    debug(code, metadata) {
+      if (process.env.NODE_ENV === "development") {
+        logger.info(`NextAuth: ${code}`, metadata);
+      }
+    },
+  },
   providers: [
     CredentialsProvider({
       name: "credentials",
