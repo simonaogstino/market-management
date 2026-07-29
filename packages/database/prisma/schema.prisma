@@ -44,6 +44,19 @@ enum SupplierPaymentType {
   CREDIT
 }
 
+enum ExpenseCategory {
+  PURCHASING
+  SALARIES
+  UTILITIES
+  RENT
+  TRANSPORT
+  MAINTENANCE
+  MARKETING
+  SUPPLIES
+  TAXES_FEES
+  OTHER
+}
+
 model Store {
   id                 String     @id @default(cuid())
   name               String
@@ -65,6 +78,7 @@ model Store {
   categories Category[]
   users     User[]
   suppliers Supplier[]
+  expenses  Expense[]
 }
 
 model User {
@@ -85,6 +99,7 @@ model User {
   supplierDeliveries SupplierDelivery[]
   supplierPayments   SupplierPayment[]
   supplierReturns    SupplierReturn[]
+  expenses     Expense[]
 }
 
 model Terminal {
@@ -324,4 +339,24 @@ model SupplierReturnLine {
   lineCostCents Int
 
   @@index([returnId])
+}
+
+model Expense {
+  id           String          @id @default(cuid())
+  storeId      String
+  store        Store           @relation(fields: [storeId], references: [id])
+  category     ExpenseCategory
+  amountCents  Int
+  incurredAt   DateTime
+  description  String?
+  payee        String?
+  reference    String?
+  note         String?
+  recordedById String?
+  recordedBy   User?           @relation(fields: [recordedById], references: [id])
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([storeId, incurredAt])
+  @@index([storeId, category])
 }

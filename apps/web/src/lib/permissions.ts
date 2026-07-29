@@ -45,6 +45,13 @@ export const PERMISSION_GROUPS = [
     ],
   },
   {
+    label: "Expenses",
+    items: [
+      { key: "expenses:view", label: "View expenses" },
+      { key: "expenses:manage", label: "Add & edit expenses" },
+    ],
+  },
+  {
     label: "Office users",
     items: [
       { key: "users:view", label: "View office users" },
@@ -148,6 +155,7 @@ export const NAV_ITEMS: Array<{
   { href: "/admin/sales", label: "Sales", icon: "sales", permission: "sales:view" },
   { href: "/admin/reports", label: "Reports", icon: "reports", permission: "reports:view" },
   { href: "/admin/suppliers", label: "Suppliers", icon: "suppliers", permission: "suppliers:view" },
+  { href: "/admin/expenses", label: "Expenses", icon: "expenses", permission: "expenses:view" },
   { href: "/admin/staff", label: "POS Staff", icon: "staff", permission: "staff:view" },
   { href: "/admin/users", label: "Office Users", icon: "users", permission: "users:view" },
   { href: "/admin/terminals", label: "POS Terminals", icon: "terminals", permission: "terminals:view" },

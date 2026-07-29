@@ -16,6 +16,7 @@ import {
   UserCog,
   Users,
   Warehouse,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 
@@ -26,6 +27,7 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   sales: Receipt,
   reports: BarChart3,
   suppliers: Truck,
+  expenses: Wallet,
   staff: Users,
   users: UserCog,
   terminals: Monitor,
