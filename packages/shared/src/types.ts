@@ -14,6 +14,7 @@ export interface ProductDto {
   stockQty: number;
   version: number;
   isActive: boolean;
+  showOnPos: boolean;
   updatedAt: string;
 }
 

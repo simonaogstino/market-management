@@ -55,6 +55,7 @@ export async function createProduct(formData: FormData) {
   const stockQty = parseInt(String(formData.get("stockQty") ?? "0"), 10);
   const categoryId = String(formData.get("categoryId") ?? "").trim() || null;
   const supplierId = String(formData.get("supplierId") ?? "").trim() || null;
+  const showOnPos = formData.get("showOnPos") === "on";
 
   if (!sku || !name || Number.isNaN(costDollars) || costDollars < 0) {
     return { error: "SKU, name, and a valid purchase price are required." };
@@ -88,6 +89,7 @@ export async function createProduct(formData: FormData) {
         stockQty: Math.max(0, stockQty),
         categoryId,
         supplierId,
+        showOnPos,
         storeId: session.user.storeId,
       },
     });
@@ -122,6 +124,7 @@ export async function updateProduct(productId: string, formData: FormData) {
   const categoryId = String(formData.get("categoryId") ?? "").trim() || null;
   const supplierId = String(formData.get("supplierId") ?? "").trim() || null;
   const isActive = formData.get("isActive") === "on";
+  const showOnPos = formData.get("showOnPos") === "on";
 
   if (!sku || !name || Number.isNaN(costDollars) || costDollars < 0) {
     return { error: "SKU, name, and a valid purchase price are required." };
@@ -158,6 +161,7 @@ export async function updateProduct(productId: string, formData: FormData) {
       categoryId,
       supplierId,
       isActive,
+      showOnPos,
       version: { increment: 1 },
     },
   });
@@ -172,6 +176,20 @@ export async function toggleProductActiveForm(formData: FormData) {
   const session = await requirePermission("products:manage");
   const productId = String(formData.get("productId") ?? "");
   await toggleProductActive(productId, session.user.storeId);
+}
+
+export async function toggleProductShowOnPosForm(formData: FormData) {
+  const session = await requirePermission("products:manage");
+  const productId = String(formData.get("productId") ?? "");
+  const product = await prisma.product.findFirst({
+    where: { id: productId, storeId: session.user.storeId },
+  });
+  if (!product) return;
+  await prisma.product.update({
+    where: { id: productId },
+    data: { showOnPos: !product.showOnPos, version: { increment: 1 } },
+  });
+  revalidatePath("/admin/products");
 }
 
 async function toggleProductActive(productId: string, storeId: string) {

@@ -37,6 +37,7 @@ export async function GET(request: Request) {
       stockQty: p.stockQty,
       version: p.version,
       isActive: p.isActive,
+      showOnPos: p.showOnPos,
       updatedAt: p.updatedAt.toISOString(),
     })),
     categories: categories.map((c) => ({ id: c.id, name: c.name })),

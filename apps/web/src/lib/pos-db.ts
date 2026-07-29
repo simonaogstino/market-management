@@ -184,6 +184,13 @@ export async function listProducts() {
   return posDb.products.filter((p) => p.isActive).toArray();
 }
 
+/** Products shown in the POS sale grid / barcode search. */
+export async function listPosCatalogProducts() {
+  return posDb.products
+    .filter((p) => p.isActive && p.showOnPos !== false)
+    .toArray();
+}
+
 export async function getCart(): Promise<CartLine[]> {
   return posDb.cart.toArray();
 }

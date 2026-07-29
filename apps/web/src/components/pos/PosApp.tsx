@@ -17,6 +17,7 @@ import {
   getTerminalConfig,
   incrementCartLine,
   listProducts,
+  listPosCatalogProducts,
   posDb,
   removeFromCart,
   clearStaffSession,
@@ -41,6 +42,7 @@ export function PosApp() {
   const [configured, setConfigured] = useState(false);
   const [staff, setStaff] = useState<StaffSession | null>(null);
   const [products, setProducts] = useState<ProductDto[]>([]);
+  const [catalogProducts, setCatalogProducts] = useState<ProductDto[]>([]);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [online, setOnline] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
@@ -118,7 +120,7 @@ export function PosApp() {
   function findProductByCode(code: string) {
     const normalized = code.trim().toLowerCase();
     if (!normalized) return null;
-    return products.find((p) => p.sku.toLowerCase() === normalized) ?? null;
+    return catalogProducts.find((p) => p.sku.toLowerCase() === normalized) ?? null;
   }
 
   async function submitBarcode(raw: string) {
@@ -163,6 +165,7 @@ export function PosApp() {
     setTerminalName(config.terminalName);
     setStaff(await getStaffSession());
     setProducts(await listProducts());
+    setCatalogProducts(await listPosCatalogProducts());
     setCart(await getCart());
     setPendingCount(await countPendingSales());
     setConflictCount(await countConflictSales());
@@ -215,11 +218,11 @@ export function PosApp() {
 
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return products;
-    return products.filter(
+    if (!q) return catalogProducts;
+    return catalogProducts.filter(
       (p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q),
     );
-  }, [products, search]);
+  }, [catalogProducts, search]);
 
   async function handleAdd(product: ProductDto) {
     const listOrCost = posMode === "owner" ? product.costCents : product.priceCents;

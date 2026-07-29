@@ -25,6 +25,7 @@ interface Product {
   categoryId: string | null;
   stockQty: number;
   isActive: boolean;
+  showOnPos: boolean;
 }
 
 export function ProductForm({
@@ -134,10 +135,18 @@ export function ProductForm({
           <input name="stockQty" type="number" min="0" defaultValue="0" />
         </label>
       )}
+      <label className="checkbox-label">
+        <input
+          type="checkbox"
+          name="showOnPos"
+          defaultChecked={product ? product.showOnPos : true}
+        />
+        Show on POS (product grid &amp; search)
+      </label>
       {product && (
         <label className="checkbox-label">
           <input type="checkbox" name="isActive" defaultChecked={product.isActive} />
-          Active (visible on POS)
+          Active (can be sold / stocked)
         </label>
       )}
       {error && <p className="form-error">{error}</p>}

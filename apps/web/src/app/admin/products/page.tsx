@@ -1,8 +1,13 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { deactivateSampleProductsForm, toggleProductActiveForm } from "@/lib/actions/admin";
+import {
+  deactivateSampleProductsForm,
+  toggleProductActiveForm,
+  toggleProductShowOnPosForm,
+} from "@/lib/actions/admin";
 import { requirePageAccess } from "@/lib/admin-session";
 import { IconEditLink, IconToggleButton, IconPower, AddButton } from "@/components/admin/AdminIcons";
+import { Monitor } from "lucide-react";
 
 export default async function ProductsPage() {
   await requirePageAccess("products:view");
@@ -46,13 +51,14 @@ export default async function ProductsPage() {
               <th align="right">Sale</th>
               <th align="right">Stock</th>
               <th>Status</th>
+              <th>On POS</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {products.length === 0 ? (
               <tr>
-                <td colSpan={8} style={{ color: "var(--muted)" }}>
+                <td colSpan={9} style={{ color: "var(--muted)" }}>
                   No products yet.{" "}
                   <Link href="/admin/products/new">Add your first product</Link>.
                 </td>
@@ -72,6 +78,21 @@ export default async function ProductsPage() {
                     ) : (
                       <span className="badge">Inactive</span>
                     )}
+                  </td>
+                  <td>
+                    <form action={toggleProductShowOnPosForm}>
+                      <input type="hidden" name="productId" value={p.id} />
+                      <IconToggleButton
+                        label={p.showOnPos ? "Hide from POS" : "Show on POS"}
+                      >
+                        <Monitor
+                          size={16}
+                          strokeWidth={2}
+                          color={p.showOnPos ? "#16a34a" : "#94a3b8"}
+                          aria-hidden
+                        />
+                      </IconToggleButton>
+                    </form>
                   </td>
                   <td>
                     <div className="table-actions">
