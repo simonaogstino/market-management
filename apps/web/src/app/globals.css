@@ -732,6 +732,25 @@ button.icon-action {
   vertical-align: top;
 }
 
+.table-filter-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+.table-filter-trigger:hover {
+  color: var(--primary, #2563eb);
+}
+
 .data-table th {
   text-align: left;
   font-size: 0.875rem;

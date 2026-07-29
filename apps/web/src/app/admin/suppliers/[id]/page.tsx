@@ -5,6 +5,7 @@ import { requirePageAccess } from "@/lib/admin-session";
 import { computeSupplierBalance, formatMoney } from "@/lib/suppliers";
 import { hasPermission } from "@/lib/permissions";
 import { IconEditButton } from "@/components/admin/AdminIcons";
+import { SupplierDeliveriesTable } from "@/components/admin/SupplierDeliveriesTable";
 
 export default async function SupplierDetailPage({
   params,
@@ -114,63 +115,25 @@ export default async function SupplierDetailPage({
 
       <section className="card" style={{ marginBottom: "1.5rem", overflowX: "auto" }}>
         <h2 style={{ marginTop: 0, fontSize: "1.125rem" }}>Deliveries</h2>
-        {supplier.deliveries.length === 0 ? (
-          <p style={{ color: "var(--muted)" }}>No deliveries recorded yet.</p>
-        ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Reference</th>
-                <th>Items</th>
-                <th>Subtotal</th>
-                <th>Discount</th>
-                <th>Net total</th>
-                <th>Paid on delivery</th>
-                <th>Outstanding</th>
-                <th>Stock</th>
-              </tr>
-            </thead>
-            <tbody>
-              {supplier.deliveries.map((delivery) => {
-                const outstanding = delivery.totalCostCents - delivery.paidAtDeliveryCents;
-                const listTotal =
-                  delivery.listTotalCents > 0 ? delivery.listTotalCents : delivery.totalCostCents;
-                return (
-                  <tr key={delivery.id}>
-                    <td>{delivery.deliveredAt.toLocaleDateString()}</td>
-                    <td>{delivery.referenceNumber ?? "—"}</td>
-                    <td>
-                      <ul className="delivery-items-list">
-                        {delivery.lines.map((line) => (
-                          <li key={line.id}>
-                            {line.product.sku} × {line.quantity} @ {formatMoney(line.unitCostCents)}
-                          </li>
-                        ))}
-                      </ul>
-                    </td>
-                    <td>{formatMoney(listTotal)}</td>
-                    <td>
-                      {delivery.discountPercent > 0
-                        ? `${delivery.discountPercent}% (−${formatMoney(delivery.discountCents)})`
-                        : "—"}
-                    </td>
-                    <td>{formatMoney(delivery.totalCostCents)}</td>
-                    <td>{formatMoney(delivery.paidAtDeliveryCents)}</td>
-                    <td>
-                      {outstanding > 0 ? (
-                        <span className="badge badge-warning">{formatMoney(outstanding)}</span>
-                      ) : (
-                        <span className="badge badge-success">Paid</span>
-                      )}
-                    </td>
-                    <td>{delivery.updateStock ? "Updated" : "—"}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
+        <SupplierDeliveriesTable
+          deliveries={supplier.deliveries.map((delivery) => ({
+            id: delivery.id,
+            deliveredAt: delivery.deliveredAt.toISOString(),
+            referenceNumber: delivery.referenceNumber,
+            listTotalCents: delivery.listTotalCents,
+            discountPercent: delivery.discountPercent,
+            discountCents: delivery.discountCents,
+            totalCostCents: delivery.totalCostCents,
+            paidAtDeliveryCents: delivery.paidAtDeliveryCents,
+            updateStock: delivery.updateStock,
+            lines: delivery.lines.map((line) => ({
+              id: line.id,
+              quantity: line.quantity,
+              unitCostCents: line.unitCostCents,
+              product: { sku: line.product.sku, name: line.product.name },
+            })),
+          }))}
+        />
       </section>
 
       <section className="card" style={{ marginBottom: "1.5rem", overflowX: "auto" }}>
