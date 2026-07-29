@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatMoney } from "@market/shared";
 import { fetchServerSyncStatus, getLocalSyncSummary, runSyncCycle } from "@/lib/pos-sync";
 
 export function PosSyncPanel({ open, onClose, onChanged }: { open: boolean; onClose: () => void; onChanged: () => void }) {
@@ -87,7 +88,7 @@ export function PosSyncPanel({ open, onClose, onChanged }: { open: boolean; onCl
             {summary.conflicts.map((c) => (
               <div key={c.localId} className="pos-conflict-item">
                 <div>
-                  #{c.localId.slice(0, 8)} · ${(c.totalCents / 100).toFixed(2)} ·{" "}
+                  #{c.localId.slice(0, 8)} · {formatMoney(c.totalCents)} ·{" "}
                   {new Date(c.soldAt).toLocaleString()}
                 </div>
                 {c.messages.map((m, i) => (

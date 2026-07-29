@@ -37,6 +37,7 @@ export interface SalePushDto {
   kind?: "SALE" | "RETURN" | "OWNER";
   /** Cart-level discount percent applied to list prices (SALE only). */
   discountPercent?: number;
+  paymentMethod?: "CASH" | "CARD" | "TRANSFER";
   lines: SaleLineDto[];
   staffId?: string;
   staffName?: string;
@@ -117,17 +118,15 @@ export interface TerminalConfig {
 export const SYNC_INTERVAL_MS = 30_000;
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
-  USD: "$",
-  EUR: "€",
-  GBP: "£",
-  CAD: "C$",
-  AUD: "A$",
-  LBP: "L.L.",
-  AED: "د.إ",
-  SAR: "﷼",
+  IQD: "د.ع",
 };
 
-export function formatMoney(cents: number, currency = "USD") {
-  const symbol = CURRENCY_SYMBOLS[currency] ?? `${currency} `;
-  return `${symbol}${(cents / 100).toFixed(2)}`;
+/** App currency is fixed to Iraqi Dinar. */
+export const APP_CURRENCY = "IQD" as const;
+
+export function formatMoney(cents: number, _currency = APP_CURRENCY) {
+  const amount = cents / 100;
+  // IQD is displayed as whole dinars (no fractional fils in everyday use).
+  const formatted = Math.round(amount).toLocaleString("en-IQ");
+  return `${CURRENCY_SYMBOLS.IQD} ${formatted}`;
 }

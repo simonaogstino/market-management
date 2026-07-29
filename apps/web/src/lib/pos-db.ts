@@ -16,6 +16,7 @@ export interface SaleOutbox {
   totalCents: number;
   kind: "SALE" | "RETURN" | "OWNER";
   discountPercent?: number;
+  paymentMethod?: "CASH" | "CARD" | "TRANSFER";
   lines: SaleLineDto[];
   syncStatus: "pending" | "synced" | "conflict";
   conflictJson?: string;
@@ -38,6 +39,7 @@ export interface CompletedSale {
   totalCents: number;
   kind?: "SALE" | "RETURN" | "OWNER";
   discountPercent?: number;
+  paymentMethod?: "CASH" | "CARD" | "TRANSFER";
   /** Pre-discount subtotal when a discount was applied. */
   subtotalCents?: number;
   lines: Array<SaleLineDto & { productName?: string }>;
@@ -125,7 +127,7 @@ export async function getStoreSettings(): Promise<StoreSettingsDto | null> {
       name: parsed.name ?? "Store",
       address: parsed.address ?? null,
       phone: parsed.phone ?? null,
-      currency: parsed.currency ?? "USD",
+      currency: parsed.currency ?? "IQD",
       lowStockThreshold: parsed.lowStockThreshold ?? 10,
       receiptHeader: parsed.receiptHeader ?? null,
       receiptFooter: parsed.receiptFooter ?? null,
@@ -268,6 +270,7 @@ export async function completeSale(
   staff: StaffSession,
   kind: "SALE" | "OWNER" = "SALE",
   discountPercent = 0,
+  paymentMethod: "CASH" | "CARD" | "TRANSFER" = "CASH",
 ) {
   const cart = await getCart();
   if (cart.length === 0) return null;
@@ -291,12 +294,15 @@ export async function completeSale(
     subtotalCents = sub;
   }
 
+  const method = kind === "OWNER" ? "CASH" : paymentMethod;
+
   await posDb.salesOutbox.put({
     localId,
     soldAt,
     totalCents,
     kind,
     discountPercent: kind === "SALE" && discountPercent > 0 ? discountPercent : undefined,
+    paymentMethod: method,
     lines,
     syncStatus: "pending",
     createdAt: soldAt,
@@ -322,6 +328,7 @@ export async function completeSale(
     totalCents,
     kind,
     discountPercent: kind === "SALE" && discountPercent > 0 ? discountPercent : undefined,
+    paymentMethod: method,
     subtotalCents,
     lines,
     staffId: staff.staffId,
@@ -329,7 +336,11 @@ export async function completeSale(
   };
 }
 
-export async function completeReturn(localId: string, staff: StaffSession) {
+export async function completeReturn(
+  localId: string,
+  staff: StaffSession,
+  paymentMethod: "CASH" | "CARD" | "TRANSFER" = "CASH",
+) {
   const cart = await getCart();
   if (cart.length === 0) return null;
 
@@ -347,6 +358,7 @@ export async function completeReturn(localId: string, staff: StaffSession) {
     soldAt,
     totalCents,
     kind: "RETURN",
+    paymentMethod,
     lines,
     syncStatus: "pending",
     createdAt: soldAt,
@@ -366,7 +378,16 @@ export async function completeReturn(localId: string, staff: StaffSession) {
   }
 
   await clearCart();
-  return { localId, soldAt, totalCents, kind: "RETURN" as const, lines, staffId: staff.staffId, staffName: staff.staffName };
+  return {
+    localId,
+    soldAt,
+    totalCents,
+    kind: "RETURN" as const,
+    paymentMethod,
+    lines,
+    staffId: staff.staffId,
+    staffName: staff.staffName,
+  };
 }
 
 export async function getPendingSales() {

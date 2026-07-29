@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateStoreSettings } from "@/lib/actions/admin";
 import type { StoreSettings } from "@/lib/store-settings";
-import { CURRENCY_OPTIONS, TIMEZONE_OPTIONS } from "@/lib/store-settings";
+import { TIMEZONE_OPTIONS } from "@/lib/store-settings";
 
 export function StoreSettingsForm({
   settings,
@@ -49,17 +49,12 @@ export function StoreSettingsForm({
         </label>
         <label>
           Currency
-          <select name="currency" defaultValue={settings.currency}>
-            {CURRENCY_OPTIONS.map((c) => (
-              <option key={c.code} value={c.code}>
-                {c.label}
-              </option>
-            ))}
-          </select>
+          <input type="hidden" name="currency" value="IQD" />
+          <input type="text" value="Iraqi Dinar (د.ع)" disabled readOnly />
         </label>
         <label>
           Timezone
-          <select name="timezone" defaultValue={settings.timezone}>
+          <select name="timezone" defaultValue={settings.timezone || "Asia/Baghdad"}>
             {TIMEZONE_OPTIONS.map((tz) => (
               <option key={tz.value} value={tz.value}>
                 {tz.label}

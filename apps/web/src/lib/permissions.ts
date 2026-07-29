@@ -52,6 +52,13 @@ export const PERMISSION_GROUPS = [
     ],
   },
   {
+    label: "Cash",
+    items: [
+      { key: "cash:view", label: "View cash sessions" },
+      { key: "cash:manage", label: "Open, close & adjust cash drawers" },
+    ],
+  },
+  {
     label: "Office users",
     items: [
       { key: "users:view", label: "View office users" },
@@ -87,7 +94,10 @@ export const POS_PERMISSION_GROUPS = [
   },
   {
     label: "Other",
-    items: [{ key: "pos:view_sync", label: "View sync & conflicts" }],
+    items: [
+      { key: "pos:cash_session", label: "Open / close cash drawer" },
+      { key: "pos:view_sync", label: "View sync & conflicts" },
+    ],
   },
 ] as const;
 
@@ -97,8 +107,12 @@ export const ALL_POS_PERMISSIONS = POS_PERMISSION_GROUPS.flatMap((g) =>
 
 export type PosPermission = (typeof ALL_POS_PERMISSIONS)[number];
 
-/** Default for new cashiers: sell + customer return. */
-export const DEFAULT_POS_PERMISSIONS: PosPermission[] = ["pos:sell", "pos:return"];
+/** Default for new cashiers: sell + customer return + cash drawer. */
+export const DEFAULT_POS_PERMISSIONS: PosPermission[] = [
+  "pos:sell",
+  "pos:return",
+  "pos:cash_session",
+];
 
 export function parsePermissions(json: string | null | undefined): string[] {
   if (!json) return [];
@@ -156,6 +170,7 @@ export const NAV_ITEMS: Array<{
   { href: "/admin/reports", label: "Reports", icon: "reports", permission: "reports:view" },
   { href: "/admin/suppliers", label: "Suppliers", icon: "suppliers", permission: "suppliers:view" },
   { href: "/admin/expenses", label: "Expenses", icon: "expenses", permission: "expenses:view" },
+  { href: "/admin/cash", label: "Cash", icon: "cash", permission: "cash:view" },
   { href: "/admin/staff", label: "POS Staff", icon: "staff", permission: "staff:view" },
   { href: "/admin/users", label: "Office Users", icon: "users", permission: "users:view" },
   { href: "/admin/terminals", label: "POS Terminals", icon: "terminals", permission: "terminals:view" },

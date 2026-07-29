@@ -4,12 +4,13 @@ import { useRef } from "react";
 import type { StoreSettingsDto } from "@market/shared";
 import { formatMoney } from "@market/shared";
 import type { CompletedSale } from "@/lib/pos-db";
+import { paymentMethodLabel } from "@/lib/cash";
 
 const DEFAULT_STORE: StoreSettingsDto = {
   name: "Market POS",
   address: null,
   phone: null,
-  currency: "USD",
+  currency: "IQD",
   lowStockThreshold: 10,
   receiptHeader: null,
   receiptFooter: null,
@@ -72,6 +73,9 @@ export function PosReceipt({
               </div>
             )}
             {sale.staffName && <div>Staff: {sale.staffName}</div>}
+            {sale.paymentMethod && sale.kind !== "OWNER" && (
+              <div>Payment: {paymentMethodLabel(sale.paymentMethod)}</div>
+            )}
             <div>{soldAtLabel}</div>
             <div className="receipt-id">
               {sale.receiptNumber ? (

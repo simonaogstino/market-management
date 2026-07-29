@@ -144,7 +144,7 @@ export function SupplierReturnForm({
                 />
               </label>
               <label>
-                Unit cost ($)
+                Unit cost (IQD)
                 <input
                   type="number"
                   min="0"

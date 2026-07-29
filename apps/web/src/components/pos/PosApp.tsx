@@ -36,6 +36,8 @@ import { PosReceipt } from "./PosReceipt";
 import { PosSyncPanel } from "./PosSyncPanel";
 import { PosReceiveStock } from "./PosReceiveStock";
 import { PosSupplierReturn } from "./PosSupplierReturn";
+import { PosCashPanel } from "./PosCashPanel";
+import { PAYMENT_METHODS, type PaymentMethodCode } from "@/lib/cash";
 
 export function PosApp() {
   const [ready, setReady] = useState(false);
@@ -54,6 +56,9 @@ export function PosApp() {
   const [showSync, setShowSync] = useState(false);
   const [showReceive, setShowReceive] = useState(false);
   const [showSupplierReturn, setShowSupplierReturn] = useState(false);
+  const [showCash, setShowCash] = useState(false);
+  const [cashOpen, setCashOpen] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>("CASH");
   const [posMode, setPosMode] = useState<"sale" | "return" | "owner">("sale");
   const [discountPercent, setDiscountPercent] = useState(0);
   const [discountInput, setDiscountInput] = useState("");
@@ -174,6 +179,13 @@ export function PosApp() {
       try {
         const config = await getTerminalConfig();
         if (config) {
+          const cashRes = await fetch("/api/pos/cash/session", {
+            headers: { "x-terminal-key": config.apiKey },
+          });
+          if (cashRes.ok) {
+            const cashData = (await cashRes.json()) as { session: unknown };
+            setCashOpen(Boolean(cashData.session));
+          }
           const res = await fetch("/api/pos/suppliers", {
             headers: { "x-terminal-key": config.apiKey },
           });
@@ -262,16 +274,23 @@ export function PosApp() {
         return;
       }
     }
+    if (!cashOpen) {
+      setError("Open the cash drawer before completing sales.");
+      setShowCash(true);
+      return;
+    }
+    const method = posMode === "owner" ? "CASH" : paymentMethod;
     const appliedDiscount = posMode === "sale" ? discountPercent : 0;
     const cartSnapshot = await getCart();
     const sale =
       posMode === "return"
-        ? await completeReturn(uuid(), staff)
+        ? await completeReturn(uuid(), staff, method)
         : await completeSale(
             uuid(),
             staff,
             posMode === "owner" ? "OWNER" : "SALE",
             appliedDiscount,
+            method,
           );
     if (!sale) return;
     let receiptNumber: string | null = null;
@@ -365,6 +384,15 @@ export function PosApp() {
           {conflictCount > 0 && can("pos:view_sync") && (
             <button type="button" className="badge badge-danger pos-badge-btn" onClick={() => setShowSync(true)}>
               {conflictCount} conflict{conflictCount > 1 ? "s" : ""}
+            </button>
+          )}
+          {can("pos:cash_session") && (
+            <button
+              className="btn btn-secondary"
+              type="button"
+              onClick={() => setShowCash(true)}
+            >
+              Cash drawer {cashOpen ? "(open)" : "(closed)"}
             </button>
           )}
           {can("pos:receive_stock") && (
@@ -558,6 +586,23 @@ export function PosApp() {
                 </span>
                 <span>{formatMoney(totalCents, storeSettings?.currency)}</span>
               </div>
+              {posMode !== "owner" && (
+                <div className="pos-payment-methods">
+                  <span className="pos-muted">Payment</span>
+                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                    {PAYMENT_METHODS.map((m) => (
+                      <button
+                        key={m.value}
+                        type="button"
+                        className={paymentMethod === m.value ? "btn" : "btn btn-secondary"}
+                        onClick={() => setPaymentMethod(m.value)}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="pos-actions">
                 {(posMode === "sale"
                   ? can("pos:sell")
@@ -620,6 +665,15 @@ export function PosApp() {
           onSuccess={async (msg) => {
             setMessage(msg);
             setError("");
+            await refresh();
+          }}
+        />
+      )}
+      {showCash && staff && can("pos:cash_session") && (
+        <PosCashPanel
+          staff={staff}
+          onClose={() => setShowCash(false)}
+          onChanged={async () => {
             await refresh();
           }}
         />

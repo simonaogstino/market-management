@@ -60,7 +60,7 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
         </select>
       </label>
       <label>
-        Amount ($) *
+        Amount (IQD) *
         <input
           name="amount"
           type="number"

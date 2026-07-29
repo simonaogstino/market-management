@@ -39,7 +39,7 @@ export function SupplierPaymentForm({ supplierId }: { supplierId: string }) {
         </span>
       </label>
       <label>
-        Amount ($) *
+        Amount (IQD) *
         <input name="amount" type="number" min="0.01" step="0.01" required />
       </label>
       <label>

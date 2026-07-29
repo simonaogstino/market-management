@@ -247,6 +247,12 @@ input, select {
   color: #86efac;
 }
 
+.pos-payment-methods {
+  margin-top: 0.75rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
 .pos-actions {
   display: grid;
   gap: 0.5rem;

@@ -80,7 +80,7 @@ export function ProductForm({
         />
       </label>
       <label>
-        Purchase price ($) *
+        Purchase price (IQD) *
         <input
           name="cost"
           type="number"
@@ -94,7 +94,7 @@ export function ProductForm({
         </span>
       </label>
       <label>
-        Sale price ($) *
+        Sale price (IQD) *
         <input
           name="price"
           type="number"

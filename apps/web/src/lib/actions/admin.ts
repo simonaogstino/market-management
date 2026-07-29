@@ -9,6 +9,7 @@ import {
   requireAdminSession,
   requirePermission,
 } from "@/lib/admin-session";
+import { APP_CURRENCY } from "@/lib/store-settings";
 
 function permissionsFromForm(formData: FormData) {
   return ALL_PERMISSIONS.filter((key) => formData.get(`perm_${key}`) === "on");
@@ -517,8 +518,8 @@ export async function updateStoreSettings(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const address = String(formData.get("address") ?? "").trim() || null;
   const phone = String(formData.get("phone") ?? "").trim() || null;
-  const currency = String(formData.get("currency") ?? "USD").trim();
-  const timezone = String(formData.get("timezone") ?? "UTC").trim();
+  const currency = APP_CURRENCY;
+  const timezone = String(formData.get("timezone") ?? "Asia/Baghdad").trim();
   const receiptHeader = String(formData.get("receiptHeader") ?? "").trim() || null;
   const receiptFooter = String(formData.get("receiptFooter") ?? "").trim() || null;
   const lowStockThreshold = parseInt(String(formData.get("lowStockThreshold") ?? "10"), 10);

@@ -6,6 +6,7 @@ import {
   toggleProductShowOnPosForm,
 } from "@/lib/actions/admin";
 import { requirePageAccess } from "@/lib/admin-session";
+import { formatMoney } from "@/lib/store-settings";
 import { IconEditLink, IconToggleButton, IconPower, AddButton } from "@/components/admin/AdminIcons";
 import { Monitor } from "lucide-react";
 
@@ -69,8 +70,8 @@ export default async function ProductsPage() {
                   <td>{p.sku}</td>
                   <td>{p.name}</td>
                   <td>{p.category?.name ?? "—"}</td>
-                  <td align="right">${(p.costCents / 100).toFixed(2)}</td>
-                  <td align="right">${(p.priceCents / 100).toFixed(2)}</td>
+                  <td align="right">{formatMoney(p.costCents)}</td>
+                  <td align="right">{formatMoney(p.priceCents)}</td>
                   <td align="right">{p.stockQty}</td>
                   <td>
                     {p.isActive ? (

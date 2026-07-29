@@ -34,6 +34,10 @@ export async function processSalePush(
   const kind = sale.kind ?? "SALE";
   const isReturn = kind === "RETURN";
   const saleKind = kind === "RETURN" ? "RETURN" : kind === "OWNER" ? "OWNER" : "SALE";
+  const paymentMethod =
+    sale.paymentMethod === "CARD" || sale.paymentMethod === "TRANSFER"
+      ? sale.paymentMethod
+      : "CASH";
 
   const existing = await prisma.sale.findUnique({
     where: { terminalId_localId: { terminalId, localId: sale.localId } },
@@ -167,6 +171,7 @@ export async function processSalePush(
         update: {
           status: SaleStatus.CONFLICT,
           kind: saleKind,
+          paymentMethod,
           totalCents: sale.totalCents,
           soldAt: new Date(sale.soldAt),
           staffId: sale.staffId ?? undefined,
@@ -175,6 +180,7 @@ export async function processSalePush(
           localId: sale.localId,
           terminalId,
           kind: saleKind,
+          paymentMethod,
           status: SaleStatus.CONFLICT,
           totalCents: sale.totalCents,
           soldAt: new Date(sale.soldAt),
@@ -225,6 +231,7 @@ export async function processSalePush(
       update: {
         status: SaleStatus.SYNCED,
         kind: saleKind,
+        paymentMethod,
         syncedAt: new Date(),
         totalCents: sale.totalCents,
         soldAt: new Date(sale.soldAt),
@@ -234,6 +241,7 @@ export async function processSalePush(
         localId: sale.localId,
         terminalId,
         kind: saleKind,
+        paymentMethod,
         status: SaleStatus.SYNCED,
         syncedAt: new Date(),
         totalCents: sale.totalCents,

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { formatMoney as formatMoneyShared } from "@market/shared";
+import { formatMoney as formatMoneyShared, APP_CURRENCY } from "@market/shared";
 
 export type StoreSettings = {
   id: string;
@@ -17,39 +17,27 @@ export type StoreSettings = {
 };
 
 export const CURRENCY_OPTIONS = [
-  { code: "USD", label: "US Dollar ($)" },
-  { code: "EUR", label: "Euro (€)" },
-  { code: "GBP", label: "British Pound (£)" },
-  { code: "CAD", label: "Canadian Dollar (C$)" },
-  { code: "AUD", label: "Australian Dollar (A$)" },
-  { code: "LBP", label: "Lebanese Pound (L.L.)" },
-  { code: "AED", label: "UAE Dirham (د.إ)" },
-  { code: "SAR", label: "Saudi Riyal (﷼)" },
+  { code: "IQD", label: "Iraqi Dinar (د.ع)" },
 ] as const;
+
+export { APP_CURRENCY };
 
 export const TIMEZONE_OPTIONS = [
   { value: "UTC", label: "UTC" },
-  { value: "America/New_York", label: "Eastern (US)" },
-  { value: "America/Chicago", label: "Central (US)" },
-  { value: "America/Denver", label: "Mountain (US)" },
-  { value: "America/Los_Angeles", label: "Pacific (US)" },
-  { value: "Europe/London", label: "London" },
-  { value: "Europe/Paris", label: "Paris / Central Europe" },
-  { value: "Europe/Berlin", label: "Berlin" },
+  { value: "Asia/Baghdad", label: "Baghdad (Iraq)" },
   { value: "Asia/Dubai", label: "Dubai" },
   { value: "Asia/Riyadh", label: "Riyadh" },
   { value: "Asia/Beirut", label: "Beirut" },
-  { value: "Asia/Kolkata", label: "India" },
-  { value: "Asia/Singapore", label: "Singapore" },
-  { value: "Australia/Sydney", label: "Sydney" },
+  { value: "Europe/London", label: "London" },
+  { value: "America/New_York", label: "Eastern (US)" },
 ] as const;
 
-export function formatMoney(cents: number, currency = "USD") {
+export function formatMoney(cents: number, currency = APP_CURRENCY) {
   return formatMoneyShared(cents, currency);
 }
 
-export function formatStoreMoney(cents: number, settings: Pick<StoreSettings, "currency">) {
-  return formatMoney(cents, settings.currency);
+export function formatStoreMoney(cents: number, _settings?: Pick<StoreSettings, "currency">) {
+  return formatMoney(cents, APP_CURRENCY);
 }
 
 export function formatInTimezone(
@@ -70,7 +58,7 @@ export async function getStoreSettings(storeId: string): Promise<StoreSettings> 
     name: store.name,
     address: store.address,
     phone: store.phone,
-    currency: store.currency,
+    currency: APP_CURRENCY,
     lowStockThreshold: store.lowStockThreshold,
     receiptHeader: store.receiptHeader,
     receiptFooter: store.receiptFooter,

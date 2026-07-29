@@ -137,7 +137,7 @@ export function SupplierDeliveryForm({
         </span>
       </label>
       <label>
-        Paid on delivery ($)
+        Paid on delivery (IQD)
         <input name="paidAtDelivery" type="number" min="0" step="0.01" defaultValue="0" />
         <span style={{ fontSize: "0.875rem", color: "var(--muted)" }}>
           Cash or transfer paid when goods were received (against the net total).
@@ -177,7 +177,7 @@ export function SupplierDeliveryForm({
               />
             </label>
             <label>
-              Unit cost ($)
+              Unit cost (IQD)
               <input
                 type="number"
                 min="0"

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { SyncPullResponse } from "@market/shared";
+import { APP_CURRENCY, type SyncPullResponse } from "@market/shared";
 import { prisma } from "@/lib/db";
 import { authenticateTerminal, unauthorized } from "@/lib/sync";
 
@@ -45,7 +45,7 @@ export async function GET(request: Request) {
       name: store.name,
       address: store.address,
       phone: store.phone,
-      currency: store.currency,
+      currency: APP_CURRENCY,
       lowStockThreshold: store.lowStockThreshold,
       receiptHeader: store.receiptHeader,
       receiptFooter: store.receiptFooter,
