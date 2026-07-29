@@ -1,6 +1,6 @@
 import Dexie, { type Table } from "dexie";
 import type { ProductDto, SaleLineDto, StoreSettingsDto } from "@market/shared";
-import { discountedUnitCents } from "@market/shared";
+import { discountedUnitCents, effectivePosPriceCents, hasActiveProductDiscount } from "@market/shared";
 
 export interface CartLine {
   productId: string;
@@ -179,7 +179,13 @@ export async function setLastSyncAt(iso: string) {
 }
 
 export async function upsertProducts(products: ProductDto[]) {
-  await posDb.products.bulkPut(products);
+  await posDb.products.bulkPut(
+    products.map((p) => ({
+      ...p,
+      discountPriceCents: p.discountPriceCents ?? null,
+      discountQtyLeft: p.discountQtyLeft ?? 0,
+    })),
+  );
 }
 
 export async function listProducts() {
@@ -210,7 +216,7 @@ async function putCartLine(line: CartLine) {
 
 export async function addToCart(product: ProductDto, unitCents?: number) {
   const existing = await posDb.cart.get(product.id);
-  const price = unitCents ?? product.priceCents;
+  const price = unitCents ?? effectivePosPriceCents(product);
   const nextQty = (existing?.quantity ?? 0) + 1;
   await putCartLine({
     productId: product.id,
@@ -227,10 +233,11 @@ export async function repriceCart(mode: "sale" | "return" | "owner", discountPer
   for (const line of cart) {
     const product = await posDb.products.get(line.productId);
     if (!product) continue;
-    const listOrCost = mode === "owner" ? product.costCents : product.priceCents;
+    const listOrCost =
+      mode === "owner" ? product.costCents : effectivePosPriceCents(product);
     const unitCents =
       mode === "sale" && discountPercent > 0
-        ? discountedUnitCents(product.priceCents, discountPercent)
+        ? discountedUnitCents(effectivePosPriceCents(product), discountPercent)
         : listOrCost;
     await putCartLine({
       ...line,
@@ -289,7 +296,7 @@ export async function completeSale(
     let sub = 0;
     for (const line of cart) {
       const product = await posDb.products.get(line.productId);
-      sub += line.quantity * (product?.priceCents ?? line.unitCents);
+      sub += line.quantity * (product ? effectivePosPriceCents(product) : line.unitCents);
     }
     subtotalCents = sub;
   }
@@ -314,9 +321,21 @@ export async function completeSale(
   for (const line of cart) {
     const product = await posDb.products.get(line.productId);
     if (product) {
+      let discountQtyLeft = product.discountQtyLeft ?? 0;
+      let discountPriceCents = product.discountPriceCents ?? null;
+      if (kind === "SALE" && hasActiveProductDiscount(product)) {
+        const used = Math.min(line.quantity, discountQtyLeft);
+        discountQtyLeft = discountQtyLeft - used;
+        if (discountQtyLeft <= 0) {
+          discountQtyLeft = 0;
+          discountPriceCents = null;
+        }
+      }
       await posDb.products.put({
         ...product,
         stockQty: Math.max(product.stockQty - line.quantity, 0),
+        discountQtyLeft,
+        discountPriceCents,
       });
     }
   }

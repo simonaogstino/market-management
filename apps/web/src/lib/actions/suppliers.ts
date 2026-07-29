@@ -4,11 +4,13 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/admin-session";
 import { applySupplierInvoiceDiscount, parseDollarsToCents } from "@/lib/suppliers";
+import { payFromCashBox } from "@/lib/cash-server";
 import { parseReturnLines, processSupplierReturn } from "@/lib/supplier-returns";
 
 function supplierPaths(supplierId: string) {
   revalidatePath("/admin/suppliers");
   revalidatePath(`/admin/suppliers/${supplierId}`);
+  revalidatePath("/admin/cash");
 }
 
 function parseDeliveryLines(formData: FormData) {
@@ -155,11 +157,29 @@ export async function createSupplierDelivery(supplierId: string, formData: FormD
     return { error: "Paid amount cannot exceed net delivery total (after discount)." };
   }
 
+  const cashTerminalId = String(formData.get("cashTerminalId") ?? "").trim();
+  if (paidAtDeliveryCents > 0) {
+    if (!cashTerminalId) {
+      return { error: "Select which cash box to pay from when paying on delivery." };
+    }
+  }
+
   for (const line of lines) {
     const product = await prisma.product.findFirst({
       where: { id: line.productId, storeId: session.user.storeId },
     });
     if (!product) return { error: "One or more products were not found." };
+  }
+
+  if (paidAtDeliveryCents > 0 && cashTerminalId) {
+    const cashResult = await payFromCashBox({
+      storeId: session.user.storeId,
+      terminalId: cashTerminalId,
+      amountCents: paidAtDeliveryCents,
+      reason: `Supplier delivery payment${referenceNumber ? ` ${referenceNumber}` : ""} — ${supplier.name}`,
+      recordedById: session.user.id,
+    });
+    if ("error" in cashResult) return { error: cashResult.error };
   }
 
   await prisma.$transaction(async (tx) => {
@@ -225,6 +245,8 @@ export async function createSupplierPayment(supplierId: string, formData: FormDa
   const paidAtRaw = String(formData.get("paidAt") ?? "");
   const reference = String(formData.get("reference") ?? "").trim() || null;
   const note = String(formData.get("note") ?? "").trim() || null;
+  const payFromCash = formData.get("payFromCash") === "on";
+  const cashTerminalId = String(formData.get("cashTerminalId") ?? "").trim();
 
   if (!["PAYMENT", "CREDIT"].includes(type)) {
     return { error: "Invalid payment type." };
@@ -243,6 +265,20 @@ export async function createSupplierPayment(supplierId: string, formData: FormDa
     return { error: "Payment date is invalid." };
   }
 
+  if (type === "PAYMENT" && payFromCash) {
+    if (!cashTerminalId) {
+      return { error: "Select which cash box to pay from." };
+    }
+    const cashResult = await payFromCashBox({
+      storeId: session.user.storeId,
+      terminalId: cashTerminalId,
+      amountCents,
+      reason: `Supplier payment — ${supplier.name}${reference ? ` (${reference})` : ""}`,
+      recordedById: session.user.id,
+    });
+    if ("error" in cashResult) return { error: cashResult.error };
+  }
+
   await prisma.supplierPayment.create({
     data: {
       supplierId,
@@ -251,7 +287,10 @@ export async function createSupplierPayment(supplierId: string, formData: FormDa
       amountCents,
       paidAt,
       reference,
-      note,
+      note:
+        type === "PAYMENT" && payFromCash
+          ? [note, "Paid from cash box"].filter(Boolean).join(" · ")
+          : note,
       recordedById: session.user.id,
     },
   });

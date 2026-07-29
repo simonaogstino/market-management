@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requirePageAccess } from "@/lib/admin-session";
+import { listOpenCashTerminals } from "@/lib/cash-server";
 import { SupplierPaymentForm } from "@/components/admin/SupplierPaymentForm";
 
 export default async function NewSupplierPaymentPage({
@@ -12,9 +13,12 @@ export default async function NewSupplierPaymentPage({
   const session = await requirePageAccess("suppliers:manage");
   const { id } = await params;
 
-  const supplier = await prisma.supplier.findFirst({
-    where: { id, storeId: session.user.storeId, isActive: true },
-  });
+  const [supplier, cashTerminals] = await Promise.all([
+    prisma.supplier.findFirst({
+      where: { id, storeId: session.user.storeId, isActive: true },
+    }),
+    listOpenCashTerminals(session.user.storeId),
+  ]);
   if (!supplier) notFound();
 
   return (
@@ -26,7 +30,7 @@ export default async function NewSupplierPaymentPage({
         </Link>
       </div>
       <div className="card" style={{ maxWidth: 480 }}>
-        <SupplierPaymentForm supplierId={supplier.id} />
+        <SupplierPaymentForm supplierId={supplier.id} cashTerminals={cashTerminals} />
       </div>
     </div>
   );

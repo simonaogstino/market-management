@@ -22,15 +22,18 @@ export function SupplierDeliveryForm({
   supplierId,
   products,
   defaultDiscountPercent = 0,
+  cashTerminals = [],
 }: {
   supplierId: string;
   products: ProductOption[];
   defaultDiscountPercent?: number;
+  cashTerminals?: Array<{ id: string; name: string; cashInBoxCents: number }>;
 }) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [discountPercent, setDiscountPercent] = useState(String(defaultDiscountPercent));
+  const [paidAtDelivery, setPaidAtDelivery] = useState("0");
   const [lines, setLines] = useState<LineRow[]>([
     {
       productId: products[0]?.id ?? "",
@@ -138,11 +141,34 @@ export function SupplierDeliveryForm({
       </label>
       <label>
         Paid on delivery (IQD)
-        <input name="paidAtDelivery" type="number" min="0" step="0.01" defaultValue="0" />
+        <input
+          name="paidAtDelivery"
+          type="number"
+          min="0"
+          step="0.01"
+          value={paidAtDelivery}
+          onChange={(e) => setPaidAtDelivery(e.target.value)}
+        />
         <span style={{ fontSize: "0.875rem", color: "var(--muted)" }}>
-          Cash or transfer paid when goods were received (against the net total).
+          If you pay cash now, it is taken from the selected cash box.
         </span>
       </label>
+      {parseFloat(paidAtDelivery || "0") > 0 && (
+        <label>
+          Pay from cash box (terminal) *
+          <select name="cashTerminalId" required defaultValue={cashTerminals[0]?.id}>
+            {cashTerminals.length === 0 ? (
+              <option value="">No open cash drawers — open one first</option>
+            ) : (
+              cashTerminals.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} — {formatMoney(t.cashInBoxCents)} available
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+      )}
       <label className="checkbox-label">
         <input type="checkbox" name="updateStock" defaultChecked />
         Add products to stock

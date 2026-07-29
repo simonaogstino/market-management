@@ -4,9 +4,11 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/admin-session";
 import { isExpenseCategory, parseDollarsToCents } from "@/lib/expenses";
+import { payFromCashBox } from "@/lib/cash-server";
 
 function expensePaths(expenseId?: string) {
   revalidatePath("/admin/expenses");
+  revalidatePath("/admin/cash");
   if (expenseId) revalidatePath(`/admin/expenses/${expenseId}/edit`);
 }
 
@@ -19,6 +21,8 @@ export async function createExpense(formData: FormData) {
   const payee = String(formData.get("payee") ?? "").trim() || null;
   const reference = String(formData.get("reference") ?? "").trim() || null;
   const note = String(formData.get("note") ?? "").trim() || null;
+  const payFromCash = formData.get("payFromCash") === "on";
+  const cashTerminalId = String(formData.get("cashTerminalId") ?? "").trim();
 
   if (!isExpenseCategory(category)) {
     return { error: "Select a valid expense category." };
@@ -32,6 +36,20 @@ export async function createExpense(formData: FormData) {
     return { error: "Expense date is invalid." };
   }
 
+  if (payFromCash) {
+    if (!cashTerminalId) {
+      return { error: "Select which cash box (terminal) to pay from." };
+    }
+    const cashResult = await payFromCashBox({
+      storeId: session.user.storeId,
+      terminalId: cashTerminalId,
+      amountCents,
+      reason: `Expense: ${description ?? category}${payee ? ` → ${payee}` : ""}`,
+      recordedById: session.user.id,
+    });
+    if ("error" in cashResult) return { error: cashResult.error };
+  }
+
   const expense = await prisma.expense.create({
     data: {
       storeId: session.user.storeId,
@@ -41,7 +59,9 @@ export async function createExpense(formData: FormData) {
       description,
       payee,
       reference,
-      note,
+      note: payFromCash
+        ? [note, `Paid from cash box`].filter(Boolean).join(" · ")
+        : note,
       recordedById: session.user.id,
     },
   });

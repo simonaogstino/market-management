@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requirePageAccess } from "@/lib/admin-session";
+import { listOpenCashTerminals } from "@/lib/cash-server";
 import { SupplierDeliveryForm } from "@/components/admin/SupplierDeliveryForm";
 
 export default async function NewSupplierDeliveryPage({
@@ -12,16 +13,18 @@ export default async function NewSupplierDeliveryPage({
   const session = await requirePageAccess("suppliers:manage");
   const { id } = await params;
 
-  const supplier = await prisma.supplier.findFirst({
-    where: { id, storeId: session.user.storeId, isActive: true },
-  });
+  const [supplier, products, cashTerminals] = await Promise.all([
+    prisma.supplier.findFirst({
+      where: { id, storeId: session.user.storeId, isActive: true },
+    }),
+    prisma.product.findMany({
+      where: { storeId: session.user.storeId, isActive: true },
+      orderBy: { name: "asc" },
+      select: { id: true, sku: true, name: true, costCents: true },
+    }),
+    listOpenCashTerminals(session.user.storeId),
+  ]);
   if (!supplier) notFound();
-
-  const products = await prisma.product.findMany({
-    where: { storeId: session.user.storeId, isActive: true },
-    orderBy: { name: "asc" },
-    select: { id: true, sku: true, name: true, costCents: true },
-  });
 
   return (
     <div>
@@ -36,6 +39,7 @@ export default async function NewSupplierDeliveryPage({
           supplierId={supplier.id}
           products={products}
           defaultDiscountPercent={supplier.discountPercent}
+          cashTerminals={cashTerminals}
         />
       </div>
     </div>

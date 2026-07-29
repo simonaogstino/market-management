@@ -21,11 +21,15 @@ interface Product {
   description: string | null;
   costCents: number;
   priceCents: number;
+  appPriceCents: number;
   supplierId: string | null;
   categoryId: string | null;
   stockQty: number;
   isActive: boolean;
   showOnPos: boolean;
+  showOnApps: boolean;
+  discountPriceCents: number | null;
+  discountQtyLeft: number;
 }
 
 export function ProductForm({
@@ -40,6 +44,14 @@ export function ProductForm({
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showOnApps, setShowOnApps] = useState(product?.showOnApps ?? false);
+  const [promoEnabled, setPromoEnabled] = useState(
+    Boolean(
+      product &&
+        product.discountPriceCents != null &&
+        product.discountQtyLeft > 0,
+    ),
+  );
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -94,7 +106,7 @@ export function ProductForm({
         </span>
       </label>
       <label>
-        Sale price (IQD) *
+        Sale price — store / POS (IQD) *
         <input
           name="price"
           type="number"
@@ -104,7 +116,28 @@ export function ProductForm({
           defaultValue={product ? (product.priceCents / 100).toFixed(2) : ""}
         />
         <span style={{ fontSize: "0.875rem", color: "var(--muted)" }}>
-          Price charged to customers at POS.
+          Price charged to customers in the store (POS).
+        </span>
+      </label>
+      <label>
+        Sale price — delivery apps (IQD)
+        <input
+          name="appPrice"
+          type="number"
+          step="0.01"
+          min="0"
+          required={showOnApps}
+          defaultValue={
+            product && product.appPriceCents > 0
+              ? (product.appPriceCents / 100).toFixed(2)
+              : product
+                ? (product.priceCents / 100).toFixed(2)
+                : ""
+          }
+          placeholder="e.g. Talabat price"
+        />
+        <span style={{ fontSize: "0.875rem", color: "var(--muted)" }}>
+          Price on Talabat and other delivery apps. Required if the product is active on apps.
         </span>
       </label>
       <label>
@@ -135,18 +168,84 @@ export function ProductForm({
           <input name="stockQty" type="number" min="0" defaultValue="0" />
         </label>
       )}
-      <label className="checkbox-label">
-        <input
-          type="checkbox"
-          name="showOnPos"
-          defaultChecked={product ? product.showOnPos : true}
-        />
-        Show on POS (product grid &amp; search)
-      </label>
+
+      <fieldset className="permissions-fieldset">
+        <legend>Limited quantity discount (POS)</legend>
+        <p style={{ margin: "0 0 0.75rem", fontSize: "0.875rem", color: "var(--muted)" }}>
+          Sell the last N pieces at a promo price. When those units are sold, the product returns to
+          the normal POS price and the discount ends.
+        </p>
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            name="promoEnabled"
+            checked={promoEnabled}
+            onChange={(e) => setPromoEnabled(e.target.checked)}
+          />
+          Enable limited discount
+        </label>
+        {promoEnabled && (
+          <>
+            <label>
+              Promo price (IQD) *
+              <input
+                name="discountPrice"
+                type="number"
+                step="0.01"
+                min="0"
+                required={promoEnabled}
+                defaultValue={
+                  product?.discountPriceCents != null
+                    ? (product.discountPriceCents / 100).toFixed(2)
+                    : ""
+                }
+              />
+            </label>
+            <label>
+              Quantity left at promo price *
+              <input
+                name="discountQtyLeft"
+                type="number"
+                min="1"
+                step="1"
+                required={promoEnabled}
+                defaultValue={
+                  product && product.discountQtyLeft > 0 ? product.discountQtyLeft : 50
+                }
+              />
+              <span style={{ fontSize: "0.875rem", color: "var(--muted)" }}>
+                Example: 50 = discount applies to the next 50 units sold on POS.
+              </span>
+            </label>
+          </>
+        )}
+      </fieldset>
+
+      <fieldset className="permissions-fieldset">
+        <legend>Where to sell</legend>
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            name="showOnPos"
+            defaultChecked={product ? product.showOnPos : true}
+          />
+          Active on POS (in-store)
+        </label>
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            name="showOnApps"
+            checked={showOnApps}
+            onChange={(e) => setShowOnApps(e.target.checked)}
+          />
+          Active on delivery apps (Talabat, etc.)
+        </label>
+      </fieldset>
+
       {product && (
         <label className="checkbox-label">
           <input type="checkbox" name="isActive" defaultChecked={product.isActive} />
-          Active (can be sold / stocked)
+          Product active (can be stocked / sold anywhere)
         </label>
       )}
       {error && <p className="form-error">{error}</p>}

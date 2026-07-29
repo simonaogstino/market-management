@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { requirePageAccess } from "@/lib/admin-session";
+import { listOpenCashTerminals } from "@/lib/cash-server";
 import { ExpenseForm } from "@/components/admin/ExpenseForm";
 
 export default async function NewExpensePage() {
-  await requirePageAccess("expenses:manage");
+  const session = await requirePageAccess("expenses:manage");
+  const cashTerminals = await listOpenCashTerminals(session.user.storeId);
 
   return (
     <div>
@@ -14,7 +16,7 @@ export default async function NewExpensePage() {
         </Link>
       </div>
       <div className="card" style={{ maxWidth: 560 }}>
-        <ExpenseForm />
+        <ExpenseForm cashTerminals={cashTerminals} />
       </div>
     </div>
   );

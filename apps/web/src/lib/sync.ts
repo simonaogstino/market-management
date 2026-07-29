@@ -1,7 +1,11 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import type { SalePushDto, SyncPushResult } from "@market/shared";
-import { discountedUnitCents } from "@market/shared";
+import {
+  discountedUnitCents,
+  effectivePosPriceCents,
+  hasActiveProductDiscount,
+} from "@market/shared";
 import { prisma, SaleStatus } from "@market/database";
 import { authOptions } from "./auth";
 import { ensureSaleReceiptNumber } from "./assign-receipt-number";
@@ -99,13 +103,18 @@ export async function processSalePush(
       });
       if (!product) continue; // stock loop below will catch missing products
 
-      const minUnit = discountedUnitCents(product.priceCents, maxDiscountPercent);
+      const listCents = effectivePosPriceCents(product);
+      const minUnit = discountedUnitCents(listCents, maxDiscountPercent);
+      const atProductPromo =
+        hasActiveProductDiscount(product) &&
+        line.unitCents >= (product.discountPriceCents ?? 0);
+
       if (line.unitCents < minUnit) {
         conflicts.push({
           productId: line.productId,
-          message: `Unit price below allowed discount (min ${minUnit}¢ vs list ${product.priceCents}¢)`,
+          message: `Unit price below allowed discount (min ${minUnit}¢ vs list ${listCents}¢)`,
         });
-      } else if (line.unitCents < product.priceCents) {
+      } else if (line.unitCents < product.priceCents && !atProductPromo) {
         if (!staffMayDiscount || maxDiscountPercent <= 0) {
           conflicts.push({
             productId: line.productId,
@@ -259,10 +268,31 @@ export async function processSalePush(
     });
 
     for (const line of sale.lines) {
+      const product = await tx.product.findUnique({ where: { id: line.productId } });
+      if (!product) continue;
+
+      const stockQty = isReturn
+        ? product.stockQty + line.quantity
+        : Math.max(0, product.stockQty - line.quantity);
+
+      let discountQtyLeft = product.discountQtyLeft;
+      let discountPriceCents = product.discountPriceCents;
+      // Consume limited promo only on normal sales (not returns / owner).
+      if (saleKind === "SALE" && !isReturn && hasActiveProductDiscount(product)) {
+        const used = Math.min(line.quantity, discountQtyLeft);
+        discountQtyLeft = discountQtyLeft - used;
+        if (discountQtyLeft <= 0) {
+          discountQtyLeft = 0;
+          discountPriceCents = null;
+        }
+      }
+
       await tx.product.update({
         where: { id: line.productId },
         data: {
-          stockQty: isReturn ? { increment: line.quantity } : { decrement: line.quantity },
+          stockQty,
+          discountQtyLeft,
+          discountPriceCents,
           version: { increment: 1 },
         },
       });

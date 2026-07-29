@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createExpense, updateExpense } from "@/lib/actions/expenses";
 import { EXPENSE_CATEGORIES } from "@/lib/expenses";
+import { formatMoney } from "@/lib/cash";
 
 interface Expense {
   id: string;
@@ -16,16 +17,29 @@ interface Expense {
   note: string | null;
 }
 
+interface CashTerminal {
+  id: string;
+  name: string;
+  cashInBoxCents: number;
+}
+
 function toDateInputValue(value: Date | string) {
   const date = typeof value === "string" ? new Date(value) : value;
   if (Number.isNaN(date.getTime())) return new Date().toISOString().slice(0, 10);
   return date.toISOString().slice(0, 10);
 }
 
-export function ExpenseForm({ expense }: { expense?: Expense }) {
+export function ExpenseForm({
+  expense,
+  cashTerminals = [],
+}: {
+  expense?: Expense;
+  cashTerminals?: CashTerminal[];
+}) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [payFromCash, setPayFromCash] = useState(false);
   const today = new Date().toISOString().slice(0, 10);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -103,6 +117,35 @@ export function ExpenseForm({ expense }: { expense?: Expense }) {
           placeholder="e.g. Receipt #, invoice #, check #"
         />
       </label>
+      {!expense && (
+        <>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              name="payFromCash"
+              checked={payFromCash}
+              onChange={(e) => setPayFromCash(e.target.checked)}
+            />
+            Pay from cash box (reduces terminal cash)
+          </label>
+          {payFromCash && (
+            <label>
+              Cash box (terminal) *
+              <select name="cashTerminalId" required={payFromCash} defaultValue={cashTerminals[0]?.id}>
+                {cashTerminals.length === 0 ? (
+                  <option value="">No open cash drawers</option>
+                ) : (
+                  cashTerminals.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} — {formatMoney(t.cashInBoxCents)} available
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
+          )}
+        </>
+      )}
       <label>
         Note
         <textarea name="note" rows={2} defaultValue={expense?.note ?? ""} />

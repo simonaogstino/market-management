@@ -3,11 +3,26 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupplierPayment } from "@/lib/actions/suppliers";
+import { formatMoney } from "@/lib/cash";
 
-export function SupplierPaymentForm({ supplierId }: { supplierId: string }) {
+interface CashTerminal {
+  id: string;
+  name: string;
+  cashInBoxCents: number;
+}
+
+export function SupplierPaymentForm({
+  supplierId,
+  cashTerminals = [],
+}: {
+  supplierId: string;
+  cashTerminals?: CashTerminal[];
+}) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [type, setType] = useState("PAYMENT");
+  const [payFromCash, setPayFromCash] = useState(true);
   const today = new Date().toISOString().slice(0, 10);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -30,7 +45,12 @@ export function SupplierPaymentForm({ supplierId }: { supplierId: string }) {
     <form className="admin-form" onSubmit={onSubmit}>
       <label>
         Type *
-        <select name="type" defaultValue="PAYMENT" required>
+        <select
+          name="type"
+          value={type}
+          onChange={(e) => setType(e.target.value)}
+          required
+        >
           <option value="PAYMENT">Payment to supplier</option>
           <option value="CREDIT">Credit from supplier</option>
         </select>
@@ -46,6 +66,35 @@ export function SupplierPaymentForm({ supplierId }: { supplierId: string }) {
         Date *
         <input name="paidAt" type="date" required defaultValue={today} />
       </label>
+      {type === "PAYMENT" && (
+        <>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              name="payFromCash"
+              checked={payFromCash}
+              onChange={(e) => setPayFromCash(e.target.checked)}
+            />
+            Pay from cash box (reduces terminal cash)
+          </label>
+          {payFromCash && (
+            <label>
+              Cash box (terminal) *
+              <select name="cashTerminalId" required={payFromCash} defaultValue={cashTerminals[0]?.id}>
+                {cashTerminals.length === 0 ? (
+                  <option value="">No open cash drawers</option>
+                ) : (
+                  cashTerminals.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} — {formatMoney(t.cashInBoxCents)} available
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
+          )}
+        </>
+      )}
       <label>
         Reference
         <input name="reference" placeholder="e.g. Check #1234, bank transfer ref" />

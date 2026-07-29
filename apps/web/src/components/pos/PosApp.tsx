@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuid } from "uuid";
 import type { ProductDto, StoreSettingsDto } from "@market/shared";
-import { SYNC_INTERVAL_MS, discountedUnitCents, formatMoney } from "@market/shared";
+import { SYNC_INTERVAL_MS, discountedUnitCents, effectivePosPriceCents, formatMoney, hasActiveProductDiscount } from "@market/shared";
 import {
   addToCart,
   clearCart,
@@ -237,10 +237,11 @@ export function PosApp() {
   }, [catalogProducts, search]);
 
   async function handleAdd(product: ProductDto) {
-    const listOrCost = posMode === "owner" ? product.costCents : product.priceCents;
+    const listOrCost =
+      posMode === "owner" ? product.costCents : effectivePosPriceCents(product);
     const unitCents =
       posMode === "sale" && discountPercent > 0
-        ? discountedUnitCents(product.priceCents, discountPercent)
+        ? discountedUnitCents(effectivePosPriceCents(product), discountPercent)
         : listOrCost;
     await addToCart(product, unitCents);
     setCart(await getCart());
@@ -460,14 +461,32 @@ export function PosApp() {
                 <div className="pos-product-name">{product.name}</div>
                 <div className="pos-muted">{product.sku}</div>
                 <div className="pos-price">
-                  {formatMoney(
-                    posMode === "owner" ? product.costCents : product.priceCents,
-                    storeSettings?.currency,
-                  )}
-                  {posMode === "owner" && (
-                    <span className="pos-muted" style={{ display: "block", fontSize: "0.7rem" }}>
-                      at cost
-                    </span>
+                  {posMode === "owner" ? (
+                    <>
+                      {formatMoney(product.costCents, storeSettings?.currency)}
+                      <span className="pos-muted" style={{ display: "block", fontSize: "0.7rem" }}>
+                        at cost
+                      </span>
+                    </>
+                  ) : hasActiveProductDiscount(product) ? (
+                    <>
+                      {formatMoney(product.discountPriceCents!, storeSettings?.currency)}
+                      <span
+                        className="pos-muted"
+                        style={{
+                          display: "block",
+                          fontSize: "0.7rem",
+                          textDecoration: "line-through",
+                        }}
+                      >
+                        {formatMoney(product.priceCents, storeSettings?.currency)}
+                      </span>
+                      <span className="pos-muted" style={{ display: "block", fontSize: "0.7rem" }}>
+                        Promo · {product.discountQtyLeft} left
+                      </span>
+                    </>
+                  ) : (
+                    formatMoney(product.priceCents, storeSettings?.currency)
                   )}
                 </div>
                 <div className="pos-stock">Stock: {product.stockQty}</div>

@@ -9,12 +9,18 @@ export interface ProductDto {
   description: string | null;
   costCents: number;
   priceCents: number;
+  appPriceCents: number;
+  /** Promo unit price while discountQtyLeft > 0; null when inactive. */
+  discountPriceCents: number | null;
+  /** Remaining units sold at the promo price. */
+  discountQtyLeft: number;
   supplierId: string | null;
   categoryId: string | null;
   stockQty: number;
   version: number;
   isActive: boolean;
   showOnPos: boolean;
+  showOnApps: boolean;
   updatedAt: string;
 }
 
@@ -89,6 +95,27 @@ export function discountedUnitCents(listCents: number, percent: number) {
   const p = Math.max(0, Math.min(100, percent));
   if (p <= 0) return listCents;
   return Math.round((listCents * (100 - p)) / 100);
+}
+
+export function hasActiveProductDiscount(p: {
+  discountPriceCents?: number | null;
+  discountQtyLeft?: number;
+}) {
+  return (
+    p.discountPriceCents != null &&
+    p.discountPriceCents >= 0 &&
+    (p.discountQtyLeft ?? 0) > 0
+  );
+}
+
+/** POS sale unit price: promo while qty remains, otherwise list price. */
+export function effectivePosPriceCents(p: {
+  priceCents: number;
+  discountPriceCents?: number | null;
+  discountQtyLeft?: number;
+}) {
+  if (hasActiveProductDiscount(p)) return p.discountPriceCents!;
+  return p.priceCents;
 }
 
 export interface SyncPushRequest {

@@ -3,12 +3,13 @@ import { prisma } from "@/lib/db";
 import {
   deactivateSampleProductsForm,
   toggleProductActiveForm,
+  toggleProductShowOnAppsForm,
   toggleProductShowOnPosForm,
 } from "@/lib/actions/admin";
 import { requirePageAccess } from "@/lib/admin-session";
 import { formatMoney } from "@/lib/store-settings";
 import { IconEditLink, IconToggleButton, IconPower, AddButton } from "@/components/admin/AdminIcons";
-import { Monitor } from "lucide-react";
+import { Monitor, Smartphone } from "lucide-react";
 
 export default async function ProductsPage() {
   await requirePageAccess("products:view");
@@ -49,17 +50,19 @@ export default async function ProductsPage() {
               <th>Name</th>
               <th>Category</th>
               <th align="right">Purchase</th>
-              <th align="right">Sale</th>
+              <th align="right">POS price</th>
+              <th align="right">Apps price</th>
               <th align="right">Stock</th>
               <th>Status</th>
-              <th>On POS</th>
+              <th>POS</th>
+              <th>Apps</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {products.length === 0 ? (
               <tr>
-                <td colSpan={9} style={{ color: "var(--muted)" }}>
+                <td colSpan={11} style={{ color: "var(--muted)" }}>
                   No products yet.{" "}
                   <Link href="/admin/products/new">Add your first product</Link>.
                 </td>
@@ -71,7 +74,17 @@ export default async function ProductsPage() {
                   <td>{p.name}</td>
                   <td>{p.category?.name ?? "—"}</td>
                   <td align="right">{formatMoney(p.costCents)}</td>
-                  <td align="right">{formatMoney(p.priceCents)}</td>
+                  <td align="right">
+                    {formatMoney(p.priceCents)}
+                    {p.discountPriceCents != null && p.discountQtyLeft > 0 && (
+                      <div style={{ fontSize: "0.75rem", color: "#b45309" }}>
+                        Promo {formatMoney(p.discountPriceCents)} · {p.discountQtyLeft} left
+                      </div>
+                    )}
+                  </td>
+                  <td align="right">
+                    {p.showOnApps || p.appPriceCents > 0 ? formatMoney(p.appPriceCents) : "—"}
+                  </td>
                   <td align="right">{p.stockQty}</td>
                   <td>
                     {p.isActive ? (
@@ -90,6 +103,21 @@ export default async function ProductsPage() {
                           size={16}
                           strokeWidth={2}
                           color={p.showOnPos ? "#16a34a" : "#94a3b8"}
+                          aria-hidden
+                        />
+                      </IconToggleButton>
+                    </form>
+                  </td>
+                  <td>
+                    <form action={toggleProductShowOnAppsForm}>
+                      <input type="hidden" name="productId" value={p.id} />
+                      <IconToggleButton
+                        label={p.showOnApps ? "Hide from apps" : "Show on apps"}
+                      >
+                        <Smartphone
+                          size={16}
+                          strokeWidth={2}
+                          color={p.showOnApps ? "#16a34a" : "#94a3b8"}
                           aria-hidden
                         />
                       </IconToggleButton>

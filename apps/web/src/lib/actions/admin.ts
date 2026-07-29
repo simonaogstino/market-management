@@ -53,20 +53,51 @@ export async function createProduct(formData: FormData) {
   const description = String(formData.get("description") ?? "").trim() || null;
   const costDollars = parseFloat(String(formData.get("cost") ?? "0"));
   const priceDollars = parseFloat(String(formData.get("price") ?? "0"));
+  const appPriceRaw = String(formData.get("appPrice") ?? "").trim();
+  const appPriceDollars = appPriceRaw === "" ? NaN : parseFloat(appPriceRaw);
   const stockQty = parseInt(String(formData.get("stockQty") ?? "0"), 10);
   const categoryId = String(formData.get("categoryId") ?? "").trim() || null;
   const supplierId = String(formData.get("supplierId") ?? "").trim() || null;
   const showOnPos = formData.get("showOnPos") === "on";
+  const showOnApps = formData.get("showOnApps") === "on";
+  const promoEnabled = formData.get("promoEnabled") === "on";
+  const discountPriceDollars = parseFloat(String(formData.get("discountPrice") ?? ""));
+  const discountQtyLeftRaw = parseInt(String(formData.get("discountQtyLeft") ?? "0"), 10);
 
   if (!sku || !name || Number.isNaN(costDollars) || costDollars < 0) {
     return { error: "SKU, name, and a valid purchase price are required." };
   }
   if (Number.isNaN(priceDollars) || priceDollars < 0) {
-    return { error: "A valid sale price is required." };
+    return { error: "A valid store / POS sale price is required." };
+  }
+  if (showOnApps && (Number.isNaN(appPriceDollars) || appPriceDollars < 0)) {
+    return { error: "Enter a delivery-app sale price when the product is active on apps." };
   }
 
   const costCents = Math.round(costDollars * 100);
   const priceCents = Math.round(priceDollars * 100);
+  const appPriceCents = showOnApps
+    ? Math.round(appPriceDollars * 100)
+    : Number.isNaN(appPriceDollars) || appPriceDollars < 0
+      ? priceCents
+      : Math.round(appPriceDollars * 100);
+
+  let discountPriceCents: number | null = null;
+  let discountQtyLeft = 0;
+  if (promoEnabled) {
+    if (Number.isNaN(discountPriceDollars) || discountPriceDollars < 0) {
+      return { error: "Enter a valid promo price for the limited discount." };
+    }
+    if (!Number.isFinite(discountQtyLeftRaw) || discountQtyLeftRaw < 1) {
+      return { error: "Promo quantity must be at least 1." };
+    }
+    discountPriceCents = Math.round(discountPriceDollars * 100);
+    if (discountPriceCents >= priceCents) {
+      return { error: "Promo price must be lower than the normal POS price." };
+    }
+    discountQtyLeft = discountQtyLeftRaw;
+  }
+
   const existing = await prisma.product.findUnique({
     where: { storeId_sku: { storeId: session.user.storeId, sku } },
   });
@@ -87,10 +118,14 @@ export async function createProduct(formData: FormData) {
         description,
         costCents,
         priceCents,
+        appPriceCents,
+        discountPriceCents,
+        discountQtyLeft,
         stockQty: Math.max(0, stockQty),
         categoryId,
         supplierId,
         showOnPos,
+        showOnApps,
         storeId: session.user.storeId,
       },
     });
@@ -122,16 +157,25 @@ export async function updateProduct(productId: string, formData: FormData) {
   const description = String(formData.get("description") ?? "").trim() || null;
   const costDollars = parseFloat(String(formData.get("cost") ?? "0"));
   const priceDollars = parseFloat(String(formData.get("price") ?? "0"));
+  const appPriceRaw = String(formData.get("appPrice") ?? "").trim();
+  const appPriceDollars = appPriceRaw === "" ? NaN : parseFloat(appPriceRaw);
   const categoryId = String(formData.get("categoryId") ?? "").trim() || null;
   const supplierId = String(formData.get("supplierId") ?? "").trim() || null;
   const isActive = formData.get("isActive") === "on";
   const showOnPos = formData.get("showOnPos") === "on";
+  const showOnApps = formData.get("showOnApps") === "on";
+  const promoEnabled = formData.get("promoEnabled") === "on";
+  const discountPriceDollars = parseFloat(String(formData.get("discountPrice") ?? ""));
+  const discountQtyLeftRaw = parseInt(String(formData.get("discountQtyLeft") ?? "0"), 10);
 
   if (!sku || !name || Number.isNaN(costDollars) || costDollars < 0) {
     return { error: "SKU, name, and a valid purchase price are required." };
   }
   if (Number.isNaN(priceDollars) || priceDollars < 0) {
-    return { error: "A valid sale price is required." };
+    return { error: "A valid store / POS sale price is required." };
+  }
+  if (showOnApps && (Number.isNaN(appPriceDollars) || appPriceDollars < 0)) {
+    return { error: "Enter a delivery-app sale price when the product is active on apps." };
   }
 
   const product = await prisma.product.findFirst({
@@ -151,6 +195,29 @@ export async function updateProduct(productId: string, formData: FormData) {
   });
   if (duplicate) return { error: `SKU "${sku}" is already used by another product.` };
 
+  const priceCents = Math.round(priceDollars * 100);
+  const appPriceCents = showOnApps
+    ? Math.round(appPriceDollars * 100)
+    : Number.isNaN(appPriceDollars) || appPriceDollars < 0
+      ? product.appPriceCents || priceCents
+      : Math.round(appPriceDollars * 100);
+
+  let discountPriceCents: number | null = null;
+  let discountQtyLeft = 0;
+  if (promoEnabled) {
+    if (Number.isNaN(discountPriceDollars) || discountPriceDollars < 0) {
+      return { error: "Enter a valid promo price for the limited discount." };
+    }
+    if (!Number.isFinite(discountQtyLeftRaw) || discountQtyLeftRaw < 1) {
+      return { error: "Promo quantity must be at least 1." };
+    }
+    discountPriceCents = Math.round(discountPriceDollars * 100);
+    if (discountPriceCents >= priceCents) {
+      return { error: "Promo price must be lower than the normal POS price." };
+    }
+    discountQtyLeft = discountQtyLeftRaw;
+  }
+
   await prisma.product.update({
     where: { id: productId },
     data: {
@@ -158,11 +225,15 @@ export async function updateProduct(productId: string, formData: FormData) {
       name,
       description,
       costCents: Math.round(costDollars * 100),
-      priceCents: Math.round(priceDollars * 100),
+      priceCents,
+      appPriceCents,
+      discountPriceCents,
+      discountQtyLeft,
       categoryId,
       supplierId,
       isActive,
       showOnPos,
+      showOnApps,
       version: { increment: 1 },
     },
   });
@@ -190,6 +261,34 @@ export async function toggleProductShowOnPosForm(formData: FormData) {
     where: { id: productId },
     data: { showOnPos: !product.showOnPos, version: { increment: 1 } },
   });
+  revalidatePath("/admin/products");
+}
+
+export async function toggleProductShowOnAppsForm(formData: FormData) {
+  const session = await requirePermission("products:manage");
+  const productId = String(formData.get("productId") ?? "");
+  const product = await prisma.product.findFirst({
+    where: { id: productId, storeId: session.user.storeId },
+  });
+  if (!product) return;
+
+  const next = !product.showOnApps;
+  if (next && product.appPriceCents <= 0) {
+    // turning on apps without a price — copy POS price
+    await prisma.product.update({
+      where: { id: productId },
+      data: {
+        showOnApps: true,
+        appPriceCents: product.priceCents,
+        version: { increment: 1 },
+      },
+    });
+  } else {
+    await prisma.product.update({
+      where: { id: productId },
+      data: { showOnApps: next, version: { increment: 1 } },
+    });
+  }
   revalidatePath("/admin/products");
 }
 
