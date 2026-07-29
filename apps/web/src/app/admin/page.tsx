@@ -2,27 +2,39 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { requirePageAccess } from "@/lib/admin-session";
 import { formatStoreMoney, getStoreSettings } from "@/lib/store-settings";
-
-function endOfDay(date: Date) {
-  const d = new Date(date);
-  d.setHours(23, 59, 59, 999);
-  return d;
-}
-
-function startOfDay(date: Date) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
+import { resolveDateRange, startOfDay, endOfDay } from "@/lib/reports/date-range";
+import {
+  getHourlySales,
+  getMonthlySalesTrend,
+  getSalesByTerminal,
+  getTopProducts,
+} from "@/lib/reports/queries";
+import {
+  ReportBarChart,
+  ReportLineChart,
+} from "@/components/admin/reports/ReportCharts";
 
 export default async function AdminDashboardPage() {
   const session = await requirePageAccess("dashboard");
   const settings = await getStoreSettings(session.user.storeId);
 
-  const todayStart = startOfDay(new Date());  const todayEnd = endOfDay(new Date());
+  const todayStart = startOfDay(new Date());
+  const todayEnd = endOfDay(new Date());
+  const { range: monthRange } = resolveDateRange({ preset: "month" });
+  const todayRange = { from: todayStart, to: todayEnd };
 
-  const [productCount, terminalCount, pendingSales, conflicts, todaySalesRows] =
-    await Promise.all([
+  const [
+    productCount,
+    terminalCount,
+    pendingSales,
+    conflicts,
+    todaySalesRows,
+    monthlyTrend,
+    hourlyToday,
+    byTerminal,
+    topProducts,
+    lowStock,
+  ] = await Promise.all([
     prisma.product.count({ where: { isActive: true } }),
     prisma.terminal.count({ where: { isActive: true } }),
     prisma.sale.count({ where: { status: "PENDING_SYNC" } }),
@@ -30,6 +42,15 @@ export default async function AdminDashboardPage() {
     prisma.sale.findMany({
       where: { soldAt: { gte: todayStart, lte: todayEnd }, status: { not: "VOIDED" } },
       select: { totalCents: true, kind: true },
+    }),
+    getMonthlySalesTrend(12),
+    getHourlySales(todayRange),
+    getSalesByTerminal(monthRange),
+    getTopProducts(monthRange, 10),
+    prisma.product.findMany({
+      where: { stockQty: { lte: settings.lowStockThreshold }, isActive: true },
+      orderBy: { stockQty: "asc" },
+      take: 5,
     }),
   ]);
 
@@ -43,11 +64,6 @@ export default async function AdminDashboardPage() {
     .filter((s) => s.kind === "OWNER")
     .reduce((sum, s) => sum + s.totalCents, 0);
 
-  const lowStock = await prisma.product.findMany({
-    where: { stockQty: { lte: settings.lowStockThreshold }, isActive: true },
-    orderBy: { stockQty: "asc" },
-    take: 5,
-  });
   return (
     <div>
       <h1 style={{ marginTop: 0 }}>Dashboard</h1>
@@ -85,10 +101,42 @@ export default async function AdminDashboardPage() {
         </div>
       </section>
 
+      <section className="dashboard-charts" style={{ marginBottom: "1.5rem" }}>
+        <h2 className="dashboard-charts-heading">Sales overview</h2>
+        <div className="dashboard-charts-grid">
+          <ReportLineChart
+            title="Monthly sales (last 12 months)"
+            data={monthlyTrend.map((m) => ({ name: m.name, net: m.value }))}
+            series={[{ key: "net", label: "Net retail", color: "#2563eb" }]}
+          />
+          <ReportBarChart
+            title="Sales by hour (today)"
+            data={hourlyToday.hours.map((h) => ({ name: h.label, value: h.netCents }))}
+          />
+          <ReportBarChart
+            title="Sales by terminal (this month)"
+            data={byTerminal.map((t) => ({ name: t.name, value: t.netCents }))}
+          />
+          <ReportBarChart
+            title="Top products (this month)"
+            layout="horizontal"
+            data={topProducts
+              .map((p) => ({ name: p.name, value: p.revenueCents }))
+              .slice(0, 10)}
+            color="#16a34a"
+          />
+        </div>
+        <p className="dashboard-charts-note">
+          Charts use retail sales (excluding owner / family). Open{" "}
+          <Link href="/admin/reports">Reports</Link> for full date ranges and CSV export.
+        </p>
+      </section>
+
       <section className="card">
         <h2 style={{ marginTop: 0, fontSize: "1.125rem" }}>
           Low stock (≤ {settings.lowStockThreshold})
-        </h2>        {lowStock.length === 0 ? (
+        </h2>
+        {lowStock.length === 0 ? (
           <p style={{ color: "var(--muted)" }}>No low-stock items.</p>
         ) : (
           <table style={{ width: "100%", borderCollapse: "collapse" }}>

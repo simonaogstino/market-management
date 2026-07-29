@@ -265,7 +265,3 @@ export function ReportPieChart({
   );
 }
 
-/** Cap long lists for readable charts. */
-export function topN(points: ChartPoint[], n: number): ChartPoint[] {
-  return points.slice(0, n);
-}

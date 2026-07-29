@@ -97,6 +97,54 @@ export async function getSalesSummary(range: DateRange) {
   };
 }
 
+/** Net retail sales by calendar month for the last `months` months (including current). */
+export async function getMonthlySalesTrend(months = 12) {
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
+  from.setHours(0, 0, 0, 0);
+  const to = endOfDayLocal(now);
+
+  const sales = await prisma.sale.findMany({
+    where: {
+      status: { not: "VOIDED" },
+      kind: { in: ["SALE", "RETURN"] },
+      soldAt: { gte: from, lte: to },
+    },
+    select: { soldAt: true, kind: true, totalCents: true },
+  });
+
+  const monthKeys: string[] = [];
+  for (let i = 0; i < months; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - (months - 1 - i), 1);
+    monthKeys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+
+  const map = new Map(monthKeys.map((k) => [k, 0]));
+  for (const s of sales) {
+    const key = `${s.soldAt.getFullYear()}-${String(s.soldAt.getMonth() + 1).padStart(2, "0")}`;
+    if (!map.has(key)) continue;
+    map.set(key, (map.get(key) ?? 0) + saleSign(s.kind) * s.totalCents);
+  }
+
+  const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  return monthKeys.map((key) => {
+    const [y, m] = key.split("-");
+    const monthIndex = Number(m) - 1;
+    return {
+      key,
+      name: `${monthLabels[monthIndex]} ${y.slice(2)}`,
+      value: map.get(key) ?? 0,
+    };
+  });
+}
+
+function endOfDayLocal(date: Date) {
+  const d = new Date(date);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
 export async function getTopProducts(range: DateRange, limit = 50) {
   const lines = await fetchActiveSaleLines(range);
   const map = new Map<

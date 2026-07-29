@@ -960,6 +960,27 @@ button.icon-action {
   font-size: 0.875rem;
 }
 
+.dashboard-charts-heading {
+  margin: 0 0 1rem;
+  font-size: 1.125rem;
+}
+
+.dashboard-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.dashboard-charts-grid > .report-chart-card {
+  margin: 0;
+}
+
+.dashboard-charts-note {
+  margin: 1rem 0 0;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
 .report-stat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));

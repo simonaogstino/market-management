@@ -11,7 +11,6 @@ import {
   ReportGroupedBarChart,
   ReportLineChart,
   ReportPieChart,
-  topN,
 } from "./ReportCharts";
 import {
   getDailyClose,
@@ -118,10 +117,9 @@ export async function renderReport(
             <ReportBarChart
               title="Top products by revenue"
               layout="horizontal"
-              data={topN(
-                data.map((p) => ({ name: p.name, value: p.revenueCents })),
-                15,
-              )}
+              data={data
+                .map((p) => ({ name: p.name, value: p.revenueCents }))
+                .slice(0, 15)}
             />
             <ReportTable
               headers={["SKU", "Product", "Qty sold", "Revenue"]}
@@ -390,10 +388,9 @@ export async function renderReport(
               <ReportBarChart
                 title="Top products"
                 layout="horizontal"
-                data={topN(
-                  data.topProducts.map((p) => ({ name: p.name, value: p.revenueCents })),
-                  15,
-                )}
+                data={data.topProducts
+                  .map((p) => ({ name: p.name, value: p.revenueCents }))
+                  .slice(0, 15)}
               />
             )}
             <h2 className="report-section-title">Top products</h2>
@@ -459,12 +456,10 @@ export async function renderReport(
             <ReportBarChart
               title="Profit by product"
               layout="horizontal"
-              data={topN(
-                [...data.byProduct]
-                  .sort((a, b) => b.profitCents - a.profitCents)
-                  .map((p) => ({ name: p.name, value: p.profitCents })),
-                15,
-              )}
+              data={[...data.byProduct]
+                .sort((a, b) => b.profitCents - a.profitCents)
+                .map((p) => ({ name: p.name, value: p.profitCents }))
+                .slice(0, 15)}
               color="#16a34a"
             />
             <h2 className="report-section-title">Profit by product</h2>
@@ -510,12 +505,10 @@ export async function renderReport(
               layout="horizontal"
               valueMode="number"
               color="#ea580c"
-              data={topN(
-                [...data]
-                  .sort((a, b) => a.stockQty - b.stockQty)
-                  .map((p) => ({ name: p.name, value: p.stockQty })),
-                20,
-              )}
+              data={[...data]
+                .sort((a, b) => a.stockQty - b.stockQty)
+                .map((p) => ({ name: p.name, value: p.stockQty }))
+                .slice(0, 20)}
             />
             <ReportTable
               headers={["SKU", "Product", "Category", "Supplier", "Stock"]}
@@ -560,12 +553,10 @@ export async function renderReport(
             <ReportBarChart
               title="Top products by inventory value"
               layout="horizontal"
-              data={topN(
-                [...data.rows]
-                  .sort((a, b) => b.valueCents - a.valueCents)
-                  .map((r) => ({ name: r.name, value: r.valueCents })),
-                15,
-              )}
+              data={[...data.rows]
+                .sort((a, b) => b.valueCents - a.valueCents)
+                .map((r) => ({ name: r.name, value: r.valueCents }))
+                .slice(0, 15)}
             />
             {byCategory.size > 0 && (
               <ReportPieChart
@@ -614,12 +605,10 @@ export async function renderReport(
               title="Dead stock value at cost"
               layout="horizontal"
               color="#ca8a04"
-              data={topN(
-                [...data]
-                  .sort((a, b) => b.valueCents - a.valueCents)
-                  .map((p) => ({ name: p.name, value: p.valueCents })),
-                15,
-              )}
+              data={[...data]
+                .sort((a, b) => b.valueCents - a.valueCents)
+                .map((p) => ({ name: p.name, value: p.valueCents }))
+                .slice(0, 15)}
             />
             <ReportTable
               headers={["SKU", "Product", "Category", "Stock", "Value at cost"]}
@@ -659,7 +648,7 @@ export async function renderReport(
                 title="Absolute qty change by product"
                 layout="horizontal"
                 valueMode="number"
-                data={topN(productPoints, 15)}
+                data={productPoints.slice(0, 15)}
               />
             )}
             <ReportTable
