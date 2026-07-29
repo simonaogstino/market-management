@@ -6,6 +6,7 @@ import { computeSupplierBalance, formatMoney } from "@/lib/suppliers";
 import { hasPermission } from "@/lib/permissions";
 import { IconEditButton } from "@/components/admin/AdminIcons";
 import { SupplierDeliveriesTable } from "@/components/admin/SupplierDeliveriesTable";
+import { SupplierReturnsTable } from "@/components/admin/SupplierReturnsTable";
 
 export default async function SupplierDetailPage({
   params,
@@ -138,40 +139,21 @@ export default async function SupplierDetailPage({
 
       <section className="card" style={{ marginBottom: "1.5rem", overflowX: "auto" }}>
         <h2 style={{ marginTop: 0, fontSize: "1.125rem" }}>Returns to supplier</h2>
-        {supplier.returns.length === 0 ? (
-          <p style={{ color: "var(--muted)" }}>No returns recorded yet.</p>
-        ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Reference</th>
-                <th>Recorded by</th>
-                <th>Items</th>
-                <th>Total (purchase price)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {supplier.returns.map((ret) => (
-                <tr key={ret.id}>
-                  <td>{ret.returnedAt.toLocaleDateString()}</td>
-                  <td>{ret.referenceNumber ?? "—"}</td>
-                  <td>{formatRecordedBy(ret.recordedBy)}</td>
-                  <td>
-                    <ul className="delivery-items-list">
-                      {ret.lines.map((line) => (
-                        <li key={line.id}>
-                          {line.product.sku} × {line.quantity} @ {formatMoney(line.unitCostCents)}
-                        </li>
-                      ))}
-                    </ul>
-                  </td>
-                  <td>{formatMoney(ret.totalCostCents)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <SupplierReturnsTable
+          returns={supplier.returns.map((ret) => ({
+            id: ret.id,
+            returnedAt: ret.returnedAt.toISOString(),
+            referenceNumber: ret.referenceNumber,
+            recordedByLabel: formatRecordedBy(ret.recordedBy),
+            totalCostCents: ret.totalCostCents,
+            lines: ret.lines.map((line) => ({
+              id: line.id,
+              quantity: line.quantity,
+              unitCostCents: line.unitCostCents,
+              product: { sku: line.product.sku, name: line.product.name },
+            })),
+          }))}
+        />
       </section>
 
       <section className="card" style={{ overflowX: "auto" }}>

@@ -7,6 +7,13 @@ import {
   StatGrid,
 } from "./ReportParts";
 import {
+  ReportBarChart,
+  ReportGroupedBarChart,
+  ReportLineChart,
+  ReportPieChart,
+  topN,
+} from "./ReportCharts";
+import {
   getDailyClose,
   getDeadStock,
   getGrossProfit,
@@ -60,6 +67,22 @@ export async function renderReport(
               <StatCard label="Retail transactions" value={String(data.saleCount)} sub={`${data.returnCount} returns`} />
               <StatCard label="Voided" value={String(data.voidedCount)} highlight={data.voidedCount > 0} />
             </StatGrid>
+            {data.daily.length > 0 && (
+              <ReportLineChart
+                title="Daily trend"
+                data={data.daily.map((d) => ({
+                  name: d.date,
+                  sales: d.sales,
+                  returns: d.returns,
+                  net: d.net,
+                }))}
+                series={[
+                  { key: "sales", label: "Sales", color: "#2563eb" },
+                  { key: "returns", label: "Returns", color: "#ea580c" },
+                  { key: "net", label: "Net", color: "#16a34a" },
+                ]}
+              />
+            )}
             <h2 className="report-section-title">Daily breakdown</h2>
             <ReportTable
               headers={["Date", "Sales", "Returns", "Owner / family", "Net (retail)"]}
@@ -91,10 +114,20 @@ export async function renderReport(
       const data = await getTopProducts(range);
       return {
         content: (
-          <ReportTable
-            headers={["SKU", "Product", "Qty sold", "Revenue"]}
-            rows={data.map((p) => [p.sku, p.name, String(p.quantity), fmt(p.revenueCents)])}
-          />
+          <>
+            <ReportBarChart
+              title="Top products by revenue"
+              layout="horizontal"
+              data={topN(
+                data.map((p) => ({ name: p.name, value: p.revenueCents })),
+                15,
+              )}
+            />
+            <ReportTable
+              headers={["SKU", "Product", "Qty sold", "Revenue"]}
+              rows={data.map((p) => [p.sku, p.name, String(p.quantity), fmt(p.revenueCents)])}
+            />
+          </>
         ),
         csv: {
           filename: "top-products.csv",
@@ -108,10 +141,16 @@ export async function renderReport(
       const data = await getSalesByTerminal(range);
       return {
         content: (
-          <ReportTable
-            headers={["Terminal", "Transactions", "Net revenue"]}
-            rows={data.map((t) => [t.name, String(t.count), fmt(t.netCents)])}
-          />
+          <>
+            <ReportBarChart
+              title="Net revenue by terminal"
+              data={data.map((t) => ({ name: t.name, value: t.netCents }))}
+            />
+            <ReportTable
+              headers={["Terminal", "Transactions", "Net revenue"]}
+              rows={data.map((t) => [t.name, String(t.count), fmt(t.netCents)])}
+            />
+          </>
         ),
         csv: {
           filename: "sales-by-terminal.csv",
@@ -125,10 +164,16 @@ export async function renderReport(
       const data = await getSalesByCashier(range);
       return {
         content: (
-          <ReportTable
-            headers={["Cashier", "Transactions", "Net revenue"]}
-            rows={data.map((c) => [c.name, String(c.count), fmt(c.netCents)])}
-          />
+          <>
+            <ReportBarChart
+              title="Net revenue by cashier"
+              data={data.map((c) => ({ name: c.name, value: c.netCents }))}
+            />
+            <ReportTable
+              headers={["Cashier", "Transactions", "Net revenue"]}
+              rows={data.map((c) => [c.name, String(c.count), fmt(c.netCents)])}
+            />
+          </>
         ),
         csv: {
           filename: "sales-by-cashier.csv",
@@ -142,10 +187,16 @@ export async function renderReport(
       const data = await getSalesByCategory(range);
       return {
         content: (
-          <ReportTable
-            headers={["Category", "Qty sold", "Revenue"]}
-            rows={data.map((c) => [c.name, String(c.quantity), fmt(c.revenueCents)])}
-          />
+          <>
+            <ReportPieChart
+              title="Revenue by category"
+              data={data.map((c) => ({ name: c.name, value: c.revenueCents }))}
+            />
+            <ReportTable
+              headers={["Category", "Qty sold", "Revenue"]}
+              rows={data.map((c) => [c.name, String(c.quantity), fmt(c.revenueCents)])}
+            />
+          </>
         ),
         csv: {
           filename: "sales-by-category.csv",
@@ -156,26 +207,14 @@ export async function renderReport(
     }
 
     case "hourly-sales": {
-      const { hours, maxCents } = await getHourlySales(range);
+      const { hours } = await getHourlySales(range);
       return {
         content: (
           <>
-            <div className="card report-heatmap">
-              {hours.map((h) => (
-                <div key={h.hour} className="report-heatmap-row">
-                  <span className="report-heatmap-label">{h.label}</span>
-                  <div className="report-heatmap-bar-wrap">
-                    <div
-                      className="report-heatmap-bar"
-                      style={{ width: `${(Math.abs(h.netCents) / maxCents) * 100}%` }}
-                    />
-                  </div>
-                  <span className="report-heatmap-value">
-                    {h.count} · {fmt(h.netCents)}
-                  </span>
-                </div>
-              ))}
-            </div>
+            <ReportBarChart
+              title="Net revenue by hour"
+              data={hours.map((h) => ({ name: h.label, value: h.netCents }))}
+            />
             <ReportTable
               headers={["Hour", "Transactions", "Net revenue"]}
               rows={hours.map((h) => [h.label, String(h.count), fmt(h.netCents)])}
@@ -192,20 +231,44 @@ export async function renderReport(
 
     case "returns-voids": {
       const data = await getReturnsAndVoids(range);
+      const byType = new Map<string, number>();
+      const byDay = new Map<string, number>();
+      for (const s of data) {
+        const typeKey = s.kind === "RETURN" ? "Return" : "Void";
+        byType.set(typeKey, (byType.get(typeKey) ?? 0) + s.totalCents);
+        const day = s.soldAt.toISOString().slice(0, 10);
+        byDay.set(day, (byDay.get(day) ?? 0) + s.totalCents);
+      }
       return {
         content: (
-          <ReportTable
-            headers={["Date", "Type", "Terminal", "Staff", "Items", "Amount", "Status"]}
-            rows={data.map((s) => [
-              s.soldAt.toLocaleString(),
-              s.kind === "RETURN" ? "Return" : "Void",
-              s.terminal.name,
-              s.staff?.name ?? "—",
-              s.lines.map((l) => `${l.quantity}× ${l.product.name}`).join(", "),
-              fmt(s.totalCents),
-              s.status,
-            ])}
-          />
+          <>
+            {byType.size > 0 && (
+              <ReportPieChart
+                title="Amount by type"
+                data={[...byType.entries()].map(([name, value]) => ({ name, value }))}
+              />
+            )}
+            {byDay.size > 1 && (
+              <ReportBarChart
+                title="Amount by day"
+                data={[...byDay.entries()]
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([name, value]) => ({ name, value }))}
+              />
+            )}
+            <ReportTable
+              headers={["Date", "Type", "Terminal", "Staff", "Items", "Amount", "Status"]}
+              rows={data.map((s) => [
+                s.soldAt.toLocaleString(),
+                s.kind === "RETURN" ? "Return" : "Void",
+                s.terminal.name,
+                s.staff?.name ?? "—",
+                s.lines.map((l) => `${l.quantity}× ${l.product.name}`).join(", "),
+                fmt(s.totalCents),
+                s.status,
+              ])}
+            />
+          </>
         ),
         csv: {
           filename: "returns-voids.csv",
@@ -251,6 +314,30 @@ export async function renderReport(
               />
               <StatCard label="Return change" value={<ChangeBadge pct={data.changes.returnCount} />} />
             </StatGrid>
+            <ReportGroupedBarChart
+              title="Current vs previous"
+              data={[
+                {
+                  name: "Net revenue",
+                  current: data.current.netCents,
+                  previous: data.previous.netCents,
+                },
+                {
+                  name: "Gross sales",
+                  current: data.current.grossCents,
+                  previous: data.previous.grossCents,
+                },
+                {
+                  name: "Returns",
+                  current: data.current.returnsCents,
+                  previous: data.previous.returnsCents,
+                },
+              ]}
+              series={[
+                { key: "current", label: "Current", color: "#2563eb" },
+                { key: "previous", label: "Previous", color: "#94a3b8" },
+              ]}
+            />
             <h2 className="report-section-title">Side by side</h2>
             <ReportTable
               headers={["Metric", "Current", "Previous", "Change"]}
@@ -299,16 +386,38 @@ export async function renderReport(
               <StatCard label="Owner / family" value={fmt(data.summary.ownerCents)} />
               <StatCard label="Voided" value={String(data.summary.voidedCount)} />
             </StatGrid>
+            {data.topProducts.length > 0 && (
+              <ReportBarChart
+                title="Top products"
+                layout="horizontal"
+                data={topN(
+                  data.topProducts.map((p) => ({ name: p.name, value: p.revenueCents })),
+                  15,
+                )}
+              />
+            )}
             <h2 className="report-section-title">Top products</h2>
             <ReportTable
               headers={["Product", "Qty", "Revenue"]}
               rows={data.topProducts.map((p) => [p.name, String(p.quantity), fmt(p.revenueCents)])}
             />
+            {data.byCashier.length > 0 && (
+              <ReportBarChart
+                title="By cashier"
+                data={data.byCashier.map((c) => ({ name: c.name, value: c.netCents }))}
+              />
+            )}
             <h2 className="report-section-title">By cashier</h2>
             <ReportTable
               headers={["Cashier", "Transactions", "Net"]}
               rows={data.byCashier.map((c) => [c.name, String(c.count), fmt(c.netCents)])}
             />
+            {data.byTerminal.length > 0 && (
+              <ReportBarChart
+                title="By terminal"
+                data={data.byTerminal.map((t) => ({ name: t.name, value: t.netCents }))}
+              />
+            )}
             <h2 className="report-section-title">By terminal</h2>
             <ReportTable
               headers={["Terminal", "Transactions", "Net"]}
@@ -347,6 +456,17 @@ export async function renderReport(
               <StatCard label="Gross profit" value={fmt(data.profitCents)} highlight={data.profitCents < 0} />
               <StatCard label="Margin" value={pct(data.marginPct)} />
             </StatGrid>
+            <ReportBarChart
+              title="Profit by product"
+              layout="horizontal"
+              data={topN(
+                [...data.byProduct]
+                  .sort((a, b) => b.profitCents - a.profitCents)
+                  .map((p) => ({ name: p.name, value: p.profitCents })),
+                15,
+              )}
+              color="#16a34a"
+            />
             <h2 className="report-section-title">Profit by product</h2>
             <ReportTable
               headers={["SKU", "Product", "Qty", "Revenue", "Cost", "Profit", "Margin"]}
@@ -385,6 +505,18 @@ export async function renderReport(
         content: (
           <>
             <p className="report-range-note">Products with stock ≤ {threshold}</p>
+            <ReportBarChart
+              title="Low stock levels"
+              layout="horizontal"
+              valueMode="number"
+              color="#ea580c"
+              data={topN(
+                [...data]
+                  .sort((a, b) => a.stockQty - b.stockQty)
+                  .map((p) => ({ name: p.name, value: p.stockQty })),
+                20,
+              )}
+            />
             <ReportTable
               headers={["SKU", "Product", "Category", "Supplier", "Stock"]}
               rows={data.map((p) => [
@@ -413,6 +545,11 @@ export async function renderReport(
 
     case "stock-valuation": {
       const data = await getStockValuation();
+      const byCategory = new Map<string, number>();
+      for (const r of data.rows) {
+        const cat = r.category || "Uncategorized";
+        byCategory.set(cat, (byCategory.get(cat) ?? 0) + r.valueCents);
+      }
       return {
         content: (
           <>
@@ -420,6 +557,22 @@ export async function renderReport(
               <StatCard label="Products in stock" value={String(data.productCount)} />
               <StatCard label="Total valuation (at cost)" value={fmt(data.totalValueCents)} />
             </StatGrid>
+            <ReportBarChart
+              title="Top products by inventory value"
+              layout="horizontal"
+              data={topN(
+                [...data.rows]
+                  .sort((a, b) => b.valueCents - a.valueCents)
+                  .map((r) => ({ name: r.name, value: r.valueCents })),
+                15,
+              )}
+            />
+            {byCategory.size > 0 && (
+              <ReportPieChart
+                title="Value by category"
+                data={[...byCategory.entries()].map(([name, value]) => ({ name, value }))}
+              />
+            )}
             <ReportTable
               headers={["SKU", "Product", "Category", "Supplier", "Qty", "Unit cost", "Value"]}
               rows={data.rows.map((r) => [
@@ -457,6 +610,17 @@ export async function renderReport(
         content: (
           <>
             <p className="report-range-note">Active products with stock but no sales in the last {days} days</p>
+            <ReportBarChart
+              title="Dead stock value at cost"
+              layout="horizontal"
+              color="#ca8a04"
+              data={topN(
+                [...data]
+                  .sort((a, b) => b.valueCents - a.valueCents)
+                  .map((p) => ({ name: p.name, value: p.valueCents })),
+                15,
+              )}
+            />
             <ReportTable
               headers={["SKU", "Product", "Category", "Stock", "Value at cost"]}
               rows={data.map((p) => [p.sku, p.name, p.category, String(p.stockQty), fmt(p.valueCents)])}
@@ -479,21 +643,39 @@ export async function renderReport(
 
     case "stock-adjustments": {
       const data = await getStockAdjustments(range);
+      const byProduct = new Map<string, number>();
+      for (const m of data) {
+        const name = m.product.name;
+        byProduct.set(name, (byProduct.get(name) ?? 0) + Math.abs(m.quantity));
+      }
+      const productPoints = [...byProduct.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, value]) => ({ name, value }));
       return {
         content: (
-          <ReportTable
-            headers={["Date", "Product", "Qty change", "Note", "By"]}
-            rows={data.map((m) => [
-              m.createdAt.toLocaleString(),
-              m.product.name,
-              <span key={m.id} className={m.quantity < 0 ? "badge badge-danger" : "badge badge-success"}>
-                {m.quantity > 0 ? "+" : ""}
-                {m.quantity}
-              </span>,
-              m.note ?? "—",
-              m.user?.name ?? "—",
-            ])}
-          />
+          <>
+            {productPoints.length > 0 && (
+              <ReportBarChart
+                title="Absolute qty change by product"
+                layout="horizontal"
+                valueMode="number"
+                data={topN(productPoints, 15)}
+              />
+            )}
+            <ReportTable
+              headers={["Date", "Product", "Qty change", "Note", "By"]}
+              rows={data.map((m) => [
+                m.createdAt.toLocaleString(),
+                m.product.name,
+                <span key={m.id} className={m.quantity < 0 ? "badge badge-danger" : "badge badge-success"}>
+                  {m.quantity > 0 ? "+" : ""}
+                  {m.quantity}
+                </span>,
+                m.note ?? "—",
+                m.user?.name ?? "—",
+              ])}
+            />
+          </>
         ),
         csv: {
           filename: "stock-adjustments.csv",
@@ -512,6 +694,9 @@ export async function renderReport(
     case "supplier-balances": {
       const data = await getSupplierBalances();
       const totalOwed = data.reduce((s, r) => s + r.remainingToPayCents, 0);
+      const owed = data
+        .filter((s) => s.remainingToPayCents > 0)
+        .sort((a, b) => b.remainingToPayCents - a.remainingToPayCents);
       return {
         content: (
           <>
@@ -519,6 +704,14 @@ export async function renderReport(
               <StatCard label="Suppliers" value={String(data.length)} />
               <StatCard label="Total owed" value={fmt(totalOwed)} highlight={totalOwed > 0} />
             </StatGrid>
+            {owed.length > 0 && (
+              <ReportBarChart
+                title="Amount owed by supplier"
+                layout="horizontal"
+                color="#ea580c"
+                data={owed.map((s) => ({ name: s.name, value: s.remainingToPayCents }))}
+              />
+            )}
             <ReportTable
               headers={["Supplier", "Delivered", "Returned", "Paid", "Owed", "Credit"]}
               rows={data.map((s) => [
@@ -549,6 +742,25 @@ export async function renderReport(
 
     case "supplier-history": {
       const data = await getSupplierHistory(range);
+      const byDay = new Map<string, { deliveries: number; returns: number; payments: number }>();
+      for (const d of data.deliveries) {
+        const day = d.deliveredAt.toISOString().slice(0, 10);
+        const row = byDay.get(day) ?? { deliveries: 0, returns: 0, payments: 0 };
+        row.deliveries += d.totalCostCents;
+        byDay.set(day, row);
+      }
+      for (const r of data.returns) {
+        const day = r.returnedAt.toISOString().slice(0, 10);
+        const row = byDay.get(day) ?? { deliveries: 0, returns: 0, payments: 0 };
+        row.returns += r.totalCostCents;
+        byDay.set(day, row);
+      }
+      for (const p of data.payments) {
+        const day = p.paidAt.toISOString().slice(0, 10);
+        const row = byDay.get(day) ?? { deliveries: 0, returns: 0, payments: 0 };
+        row.payments += p.amountCents;
+        byDay.set(day, row);
+      }
       return {
         content: (
           <>
@@ -558,6 +770,42 @@ export async function renderReport(
               <StatCard label="Payments" value={fmt(data.totalPaid)} />
               <StatCard label="Credits" value={fmt(data.totalCredits)} />
             </StatGrid>
+            <ReportGroupedBarChart
+              title="Period totals"
+              data={[
+                {
+                  name: "Totals",
+                  delivered: data.totalDelivered,
+                  returned: data.totalReturned,
+                  paid: data.totalPaid,
+                  credits: data.totalCredits,
+                },
+              ]}
+              series={[
+                { key: "delivered", label: "Deliveries", color: "#2563eb" },
+                { key: "returned", label: "Returns", color: "#ea580c" },
+                { key: "paid", label: "Payments", color: "#16a34a" },
+                { key: "credits", label: "Credits", color: "#7c3aed" },
+              ]}
+            />
+            {byDay.size > 1 && (
+              <ReportGroupedBarChart
+                title="Activity by day"
+                data={[...byDay.entries()]
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([name, v]) => ({
+                    name,
+                    deliveries: v.deliveries,
+                    returns: v.returns,
+                    payments: v.payments,
+                  }))}
+                series={[
+                  { key: "deliveries", label: "Deliveries", color: "#2563eb" },
+                  { key: "returns", label: "Returns", color: "#ea580c" },
+                  { key: "payments", label: "Payments", color: "#16a34a" },
+                ]}
+              />
+            )}
             <h2 className="report-section-title">Deliveries</h2>
             <ReportTable
               headers={["Date", "Supplier", "Reference", "Total", "Paid on delivery", "By"]}
@@ -630,6 +878,13 @@ export async function renderReport(
       return {
         content: (
           <>
+            {data.byStaff.length > 0 && (
+              <ReportBarChart
+                title="Units received by staff"
+                valueMode="number"
+                data={data.byStaff.map((s) => ({ name: s.name, value: s.totalQty }))}
+              />
+            )}
             <h2 className="report-section-title">By staff member</h2>
             <ReportTable
               headers={["Staff", "Receipts", "Total units"]}
@@ -664,6 +919,18 @@ export async function renderReport(
 
     case "sync-operations": {
       const data = await getSyncOperations();
+      const statusPoints = [
+        { name: "Pending sync", value: data.pendingSales },
+        { name: "Open conflicts", value: data.openConflicts },
+        {
+          name: "Active terminals",
+          value: data.terminals.filter((t) => t.isActive).length,
+        },
+        {
+          name: "Inactive terminals",
+          value: data.terminals.filter((t) => !t.isActive).length,
+        },
+      ].filter((p) => p.value > 0);
       return {
         content: (
           <>
@@ -671,6 +938,9 @@ export async function renderReport(
               <StatCard label="Pending sync" value={String(data.pendingSales)} highlight={data.pendingSales > 0} />
               <StatCard label="Open conflicts" value={String(data.openConflicts)} highlight={data.openConflicts > 0} />
             </StatGrid>
+            {statusPoints.length > 0 && (
+              <ReportPieChart title="Sync status overview" valueMode="number" data={statusPoints} />
+            )}
             <h2 className="report-section-title">Terminals</h2>
             <ReportTable
               headers={["Terminal", "Status", "Last sync"]}

@@ -3,16 +3,12 @@
 import { useMemo, useState } from "react";
 import { formatMoney } from "@/lib/suppliers";
 
-export type SupplierDeliveryRow = {
+export type SupplierReturnRow = {
   id: string;
-  deliveredAt: string;
+  returnedAt: string;
   referenceNumber: string | null;
-  listTotalCents: number;
-  discountPercent: number;
-  discountCents: number;
+  recordedByLabel: string;
   totalCostCents: number;
-  paidAtDeliveryCents: number;
-  updateStock: boolean;
   lines: Array<{
     id: string;
     quantity: number;
@@ -33,7 +29,7 @@ function endOfDay(isoDate: string) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-export function SupplierDeliveriesTable({ deliveries }: { deliveries: SupplierDeliveryRow[] }) {
+export function SupplierReturnsTable({ returns }: { returns: SupplierReturnRow[] }) {
   const [openFilter, setOpenFilter] = useState<FilterPanel>(null);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -46,21 +42,21 @@ export function SupplierDeliveriesTable({ deliveries }: { deliveries: SupplierDe
     const refQ = referenceQuery.trim().toLowerCase();
     const itemsQ = itemsQuery.trim().toLowerCase();
 
-    return deliveries.filter((delivery) => {
+    return returns.filter((ret) => {
       if (from || to) {
-        const at = new Date(delivery.deliveredAt);
+        const at = new Date(ret.returnedAt);
         if (Number.isNaN(at.getTime())) return false;
         if (from && at < from) return false;
         if (to && at > to) return false;
       }
 
       if (refQ) {
-        const ref = (delivery.referenceNumber ?? "").toLowerCase();
+        const ref = (ret.referenceNumber ?? "").toLowerCase();
         if (!ref.includes(refQ)) return false;
       }
 
       if (itemsQ) {
-        const haystack = delivery.lines
+        const haystack = ret.lines
           .map((line) => `${line.product.sku} ${line.product.name}`)
           .join(" ")
           .toLowerCase();
@@ -69,7 +65,7 @@ export function SupplierDeliveriesTable({ deliveries }: { deliveries: SupplierDe
 
       return true;
     });
-  }, [deliveries, fromDate, toDate, referenceQuery, itemsQuery]);
+  }, [returns, fromDate, toDate, referenceQuery, itemsQuery]);
 
   const dateActive = Boolean(fromDate || toDate);
   const referenceActive = Boolean(referenceQuery.trim());
@@ -87,8 +83,8 @@ export function SupplierDeliveriesTable({ deliveries }: { deliveries: SupplierDe
     setItemsQuery("");
   }
 
-  if (deliveries.length === 0) {
-    return <p style={{ color: "var(--muted)" }}>No deliveries recorded yet.</p>;
+  if (returns.length === 0) {
+    return <p style={{ color: "var(--muted)" }}>No returns recorded yet.</p>;
   }
 
   return (
@@ -174,7 +170,7 @@ export function SupplierDeliveriesTable({ deliveries }: { deliveries: SupplierDe
 
       {filtered.length === 0 ? (
         <p style={{ color: "var(--muted)" }}>
-          No deliveries match these filters.
+          No returns match these filters.
           {hasActiveFilter && (
             <>
               {" "}
@@ -210,6 +206,7 @@ export function SupplierDeliveriesTable({ deliveries }: { deliveries: SupplierDe
                   <span aria-hidden>{openFilter === "reference" ? " ▴" : " ▾"}</span>
                 </button>
               </th>
+              <th>Recorded by</th>
               <th>
                 <button
                   type="button"
@@ -221,51 +218,27 @@ export function SupplierDeliveriesTable({ deliveries }: { deliveries: SupplierDe
                   <span aria-hidden>{openFilter === "items" ? " ▴" : " ▾"}</span>
                 </button>
               </th>
-              <th>Subtotal</th>
-              <th>Discount</th>
-              <th>Net total</th>
-              <th>Paid on delivery</th>
-              <th>Outstanding</th>
-              <th>Stock</th>
+              <th>Total (purchase price)</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((delivery) => {
-              const outstanding = delivery.totalCostCents - delivery.paidAtDeliveryCents;
-              const listTotal =
-                delivery.listTotalCents > 0 ? delivery.listTotalCents : delivery.totalCostCents;
-              return (
-                <tr key={delivery.id}>
-                  <td>{new Date(delivery.deliveredAt).toLocaleDateString()}</td>
-                  <td>{delivery.referenceNumber ?? "—"}</td>
-                  <td>
-                    <ul className="delivery-items-list">
-                      {delivery.lines.map((line) => (
-                        <li key={line.id}>
-                          {line.product.sku} × {line.quantity} @ {formatMoney(line.unitCostCents)}
-                        </li>
-                      ))}
-                    </ul>
-                  </td>
-                  <td>{formatMoney(listTotal)}</td>
-                  <td>
-                    {delivery.discountPercent > 0
-                      ? `${delivery.discountPercent}% (−${formatMoney(delivery.discountCents)})`
-                      : "—"}
-                  </td>
-                  <td>{formatMoney(delivery.totalCostCents)}</td>
-                  <td>{formatMoney(delivery.paidAtDeliveryCents)}</td>
-                  <td>
-                    {outstanding > 0 ? (
-                      <span className="badge badge-warning">{formatMoney(outstanding)}</span>
-                    ) : (
-                      <span className="badge badge-success">Paid</span>
-                    )}
-                  </td>
-                  <td>{delivery.updateStock ? "Updated" : "—"}</td>
-                </tr>
-              );
-            })}
+            {filtered.map((ret) => (
+              <tr key={ret.id}>
+                <td>{new Date(ret.returnedAt).toLocaleDateString()}</td>
+                <td>{ret.referenceNumber ?? "—"}</td>
+                <td>{ret.recordedByLabel}</td>
+                <td>
+                  <ul className="delivery-items-list">
+                    {ret.lines.map((line) => (
+                      <li key={line.id}>
+                        {line.product.sku} × {line.quantity} @ {formatMoney(line.unitCostCents)}
+                      </li>
+                    ))}
+                  </ul>
+                </td>
+                <td>{formatMoney(ret.totalCostCents)}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       )}

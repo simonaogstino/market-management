@@ -937,6 +937,29 @@ button.icon-action {
   margin: 0.5rem 0 0;
 }
 
+.report-chart-card {
+  padding: 1rem 1.25rem;
+}
+
+.report-chart-title {
+  margin: 0 0 0.75rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.report-chart-body {
+  width: 100%;
+  min-height: 300px;
+}
+
+.report-chart-empty {
+  margin: 0;
+  padding: 2rem 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
 .report-stat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
