@@ -806,6 +806,29 @@ button.icon-action {
   color: var(--muted);
 }
 
+.invoice-totals {
+  margin: 0.5rem 0 1rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f8fafc;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.invoice-totals-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.9375rem;
+}
+
+.invoice-totals-net {
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+  font-size: 1.0625rem;
+}
+
 .filters-form {
   display: flex;
   gap: 1rem;

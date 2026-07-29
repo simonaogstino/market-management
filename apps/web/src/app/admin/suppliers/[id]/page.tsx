@@ -51,6 +51,9 @@ export default async function SupplierDetailPage({
           <h1 style={{ margin: 0 }}>{supplier.name}</h1>
           <p style={{ color: "var(--muted)", margin: "0.25rem 0 0" }}>
             {supplier.contactPerson ?? supplier.phone ?? supplier.email ?? "No contact"}
+            {supplier.discountPercent > 0 && (
+              <> · Invoice discount {supplier.discountPercent}%</>
+            )}
           </p>
         </div>
         <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
@@ -120,7 +123,9 @@ export default async function SupplierDetailPage({
                 <th>Date</th>
                 <th>Reference</th>
                 <th>Items</th>
-                <th>Total</th>
+                <th>Subtotal</th>
+                <th>Discount</th>
+                <th>Net total</th>
                 <th>Paid on delivery</th>
                 <th>Outstanding</th>
                 <th>Stock</th>
@@ -129,6 +134,8 @@ export default async function SupplierDetailPage({
             <tbody>
               {supplier.deliveries.map((delivery) => {
                 const outstanding = delivery.totalCostCents - delivery.paidAtDeliveryCents;
+                const listTotal =
+                  delivery.listTotalCents > 0 ? delivery.listTotalCents : delivery.totalCostCents;
                 return (
                   <tr key={delivery.id}>
                     <td>{delivery.deliveredAt.toLocaleDateString()}</td>
@@ -141,6 +148,12 @@ export default async function SupplierDetailPage({
                           </li>
                         ))}
                       </ul>
+                    </td>
+                    <td>{formatMoney(listTotal)}</td>
+                    <td>
+                      {delivery.discountPercent > 0
+                        ? `${delivery.discountPercent}% (−${formatMoney(delivery.discountCents)})`
+                        : "—"}
                     </td>
                     <td>{formatMoney(delivery.totalCostCents)}</td>
                     <td>{formatMoney(delivery.paidAtDeliveryCents)}</td>

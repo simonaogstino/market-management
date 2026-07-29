@@ -10,6 +10,7 @@ interface Supplier {
   contactPerson: string | null;
   phone: string | null;
   email: string | null;
+  discountPercent: number;
   isActive: boolean;
 }
 
@@ -55,6 +56,22 @@ export function SupplierForm({ supplier }: { supplier?: Supplier }) {
           defaultValue={supplier ? displayContact(supplier) : ""}
           placeholder="e.g. Mike — 555-0100"
         />
+      </label>
+      <label>
+        Invoice discount (%)
+        <input
+          name="discountPercent"
+          type="number"
+          min={0}
+          max={100}
+          step={1}
+          required
+          defaultValue={supplier?.discountPercent ?? 0}
+        />
+        <span style={{ fontSize: "0.875rem", color: "var(--muted)" }}>
+          Discount this supplier gives your store on their invoices. Applied automatically when
+          recording a delivery.
+        </span>
       </label>
       {supplier && (
         <label className="checkbox-label">

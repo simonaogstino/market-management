@@ -219,6 +219,8 @@ model Supplier {
   address             String?
   notes               String?
   openingBalanceCents Int      @default(0)
+  /** Standing % discount this supplier gives the store on invoices. */
+  discountPercent     Int      @default(0)
   isActive            Boolean  @default(true)
   storeId             String
   store               Store    @relation(fields: [storeId], references: [id])
@@ -240,6 +242,12 @@ model SupplierDelivery {
   referenceNumber     String?
   deliveredAt         DateTime
   note                String?
+  /** Sum of line costs before supplier discount. */
+  listTotalCents      Int      @default(0)
+  /** Snapshot of supplier discount % at time of invoice. */
+  discountPercent     Int      @default(0)
+  discountCents       Int      @default(0)
+  /** Net amount owed for this delivery (after discount). */
   totalCostCents      Int
   paidAtDeliveryCents Int      @default(0)
   updateStock         Boolean  @default(true)

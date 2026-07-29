@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupplierDelivery } from "@/lib/actions/suppliers";
+import { applySupplierInvoiceDiscount, formatMoney } from "@/lib/suppliers";
 
 interface ProductOption {
   id: string;
@@ -20,13 +21,16 @@ interface LineRow {
 export function SupplierDeliveryForm({
   supplierId,
   products,
+  defaultDiscountPercent = 0,
 }: {
   supplierId: string;
   products: ProductOption[];
+  defaultDiscountPercent?: number;
 }) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [discountPercent, setDiscountPercent] = useState(String(defaultDiscountPercent));
   const [lines, setLines] = useState<LineRow[]>([
     {
       productId: products[0]?.id ?? "",
@@ -36,6 +40,20 @@ export function SupplierDeliveryForm({
   ]);
 
   const today = new Date().toISOString().slice(0, 10);
+
+  const totals = useMemo(() => {
+    const listTotalCents = lines.reduce((sum, line) => {
+      const qty = parseInt(line.quantity, 10);
+      const unit = Math.round(parseFloat(line.unitCost || "0") * 100);
+      if (!qty || qty <= 0 || Number.isNaN(unit) || unit < 0) return sum;
+      return sum + qty * unit;
+    }, 0);
+    const pct = parseInt(discountPercent, 10);
+    return {
+      listTotalCents,
+      ...applySupplierInvoiceDiscount(listTotalCents, Number.isNaN(pct) ? 0 : pct),
+    };
+  }, [lines, discountPercent]);
 
   function addLine() {
     setLines((prev) => [...prev, { productId: products[0]?.id ?? "", quantity: "1", unitCost: "0" }]);
@@ -68,6 +86,7 @@ export function SupplierDeliveryForm({
     setError("");
 
     const formData = new FormData(e.currentTarget);
+    formData.set("discountPercent", discountPercent);
     formData.set("lineCount", String(lines.length));
     lines.forEach((line, i) => {
       formData.set(`line_${i}_productId`, line.productId);
@@ -104,10 +123,24 @@ export function SupplierDeliveryForm({
         <input name="deliveredAt" type="date" required defaultValue={today} />
       </label>
       <label>
+        Supplier invoice discount (%)
+        <input
+          type="number"
+          min={0}
+          max={100}
+          step={1}
+          value={discountPercent}
+          onChange={(e) => setDiscountPercent(e.target.value)}
+        />
+        <span style={{ fontSize: "0.875rem", color: "var(--muted)" }}>
+          Defaults from the supplier profile. Change only for this invoice if needed.
+        </span>
+      </label>
+      <label>
         Paid on delivery ($)
         <input name="paidAtDelivery" type="number" min="0" step="0.01" defaultValue="0" />
         <span style={{ fontSize: "0.875rem", color: "var(--muted)" }}>
-          Cash or transfer paid when goods were received.
+          Cash or transfer paid when goods were received (against the net total).
         </span>
       </label>
       <label className="checkbox-label">
@@ -116,7 +149,7 @@ export function SupplierDeliveryForm({
       </label>
 
       <fieldset className="permissions-fieldset">
-        <legend>Products delivered</legend>
+        <legend>Products delivered (invoice unit costs)</legend>
         {lines.map((line, index) => (
           <div key={index} className="delivery-line-row">
             <label>
@@ -165,6 +198,21 @@ export function SupplierDeliveryForm({
           Add line
         </button>
       </fieldset>
+
+      <div className="invoice-totals">
+        <div className="invoice-totals-row">
+          <span>Invoice subtotal</span>
+          <strong>{formatMoney(totals.listTotalCents)}</strong>
+        </div>
+        <div className="invoice-totals-row">
+          <span>Discount ({totals.discountPercent}%)</span>
+          <strong>−{formatMoney(totals.discountCents)}</strong>
+        </div>
+        <div className="invoice-totals-row invoice-totals-net">
+          <span>Net payable</span>
+          <strong>{formatMoney(totals.netCents)}</strong>
+        </div>
+      </div>
 
       <label>
         Note

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/admin-session";
-import { parseDollarsToCents } from "@/lib/suppliers";
+import { applySupplierInvoiceDiscount, parseDollarsToCents } from "@/lib/suppliers";
 import { parseReturnLines, processSupplierReturn } from "@/lib/supplier-returns";
 
 function supplierPaths(supplierId: string) {
@@ -30,18 +30,29 @@ function parseDeliveryLines(formData: FormData) {
   return lines;
 }
 
+function parseDiscountPercent(formData: FormData) {
+  const raw = parseInt(String(formData.get("discountPercent") ?? "0"), 10);
+  if (Number.isNaN(raw) || raw < 0 || raw > 100) return null;
+  return raw;
+}
+
 export async function createSupplier(formData: FormData) {
   const session = await requirePermission("suppliers:manage");
   const name = String(formData.get("name") ?? "").trim();
   const contact = String(formData.get("contact") ?? "").trim();
+  const discountPercent = parseDiscountPercent(formData);
 
   if (!name) return { error: "Supplier name is required." };
   if (!contact) return { error: "Contact is required." };
+  if (discountPercent === null) {
+    return { error: "Invoice discount must be between 0 and 100." };
+  }
 
   const supplier = await prisma.supplier.create({
     data: {
       name,
       contactPerson: contact,
+      discountPercent,
       storeId: session.user.storeId,
     },
   });
@@ -55,9 +66,13 @@ export async function updateSupplier(supplierId: string, formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const contact = String(formData.get("contact") ?? "").trim();
   const isActive = formData.get("isActive") === "on";
+  const discountPercent = parseDiscountPercent(formData);
 
   if (!name) return { error: "Supplier name is required." };
   if (!contact) return { error: "Contact is required." };
+  if (discountPercent === null) {
+    return { error: "Invoice discount must be between 0 and 100." };
+  }
 
   const supplier = await prisma.supplier.findFirst({
     where: { id: supplierId, storeId: session.user.storeId },
@@ -69,6 +84,7 @@ export async function updateSupplier(supplierId: string, formData: FormData) {
     data: {
       name,
       contactPerson: contact,
+      discountPercent,
       isActive,
     },
   });
@@ -121,9 +137,22 @@ export async function createSupplierDelivery(supplierId: string, formData: FormD
     return { error: "Delivery date is invalid." };
   }
 
-  const totalCostCents = lines.reduce((sum, line) => sum + line.quantity * line.unitCostCents, 0);
+  const listTotalCents = lines.reduce((sum, line) => sum + line.quantity * line.unitCostCents, 0);
+  const formDiscount = formData.get("discountPercent");
+  const discountPercent =
+    formDiscount != null && String(formDiscount).trim() !== ""
+      ? parseInt(String(formDiscount), 10)
+      : supplier.discountPercent;
+  if (Number.isNaN(discountPercent) || discountPercent < 0 || discountPercent > 100) {
+    return { error: "Invoice discount must be between 0 and 100." };
+  }
+  const { discountCents, netCents: totalCostCents } = applySupplierInvoiceDiscount(
+    listTotalCents,
+    discountPercent,
+  );
+
   if (paidAtDeliveryCents > totalCostCents) {
-    return { error: "Paid amount cannot exceed delivery total." };
+    return { error: "Paid amount cannot exceed net delivery total (after discount)." };
   }
 
   for (const line of lines) {
@@ -141,6 +170,9 @@ export async function createSupplierDelivery(supplierId: string, formData: FormD
         referenceNumber,
         deliveredAt,
         note,
+        listTotalCents,
+        discountPercent,
+        discountCents,
         totalCostCents,
         paidAtDeliveryCents,
         updateStock,

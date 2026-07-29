@@ -6,6 +6,17 @@ export function parseDollarsToCents(value: string) {
   return Math.round(dollars * 100);
 }
 
+/** Apply a supplier invoice % discount to a list (gross) total. */
+export function applySupplierInvoiceDiscount(listTotalCents: number, discountPercent: number) {
+  const pct = Math.max(0, Math.min(100, Math.round(discountPercent)));
+  const discountCents = Math.round((listTotalCents * pct) / 100);
+  return {
+    discountPercent: pct,
+    discountCents,
+    netCents: Math.max(0, listTotalCents - discountCents),
+  };
+}
+
 type DeliveryTotals = { totalCostCents: number; paidAtDeliveryCents: number };
 type ReturnTotals = { totalCostCents: number };
 type PaymentTotals = { type: string; amountCents: number };

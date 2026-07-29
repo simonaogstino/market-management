@@ -32,7 +32,11 @@ export default async function NewSupplierDeliveryPage({
         </Link>
       </div>
       <div className="card" style={{ maxWidth: 720 }}>
-        <SupplierDeliveryForm supplierId={supplier.id} products={products} />
+        <SupplierDeliveryForm
+          supplierId={supplier.id}
+          products={products}
+          defaultDiscountPercent={supplier.discountPercent}
+        />
       </div>
     </div>
   );

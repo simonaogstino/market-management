@@ -40,6 +40,7 @@ export default async function SuppliersPage() {
             <tr>
               <th>Supplier</th>
               <th>Contact</th>
+              <th>Discount</th>
               <th>Total delivered</th>
               <th>Total paid</th>
               <th>Remaining</th>
@@ -50,7 +51,7 @@ export default async function SuppliersPage() {
           <tbody>
             {suppliers.length === 0 ? (
               <tr>
-                <td colSpan={7} style={{ color: "var(--muted)" }}>
+                <td colSpan={8} style={{ color: "var(--muted)" }}>
                   No suppliers yet. <Link href="/admin/suppliers/new">Add one</Link>.
                 </td>
               </tr>
@@ -70,6 +71,9 @@ export default async function SuppliersPage() {
                     </td>
                     <td>
                       {supplier.contactPerson ?? supplier.phone ?? supplier.email ?? "—"}
+                    </td>
+                    <td>
+                      {supplier.discountPercent > 0 ? `${supplier.discountPercent}%` : "—"}
                     </td>
                     <td>{formatMoney(balance.totalDelivered)}</td>
                     <td>{formatMoney(balance.totalPaid)}</td>
