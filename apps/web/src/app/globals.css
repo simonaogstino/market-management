@@ -347,6 +347,35 @@ input, select {
   gap: 0.35rem;
 }
 
+.pos-checkout-payment {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+  padding: 0.75rem;
+  border: 2px solid #22c55e;
+  border-radius: 8px;
+  background: #052e16;
+  text-align: center;
+}
+
+.pos-checkout-payment-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.pos-payment-choice-btn {
+  min-height: 58px;
+  font-size: 1rem;
+  font-weight: 800;
+  touch-action: manipulation;
+}
+
+.pos-checkout-payment-buttons .btn-secondary {
+  grid-column: 1 / -1;
+  min-height: 38px;
+}
+
 .pos-actions {
   display: grid;
   grid-template-columns: 1fr auto;

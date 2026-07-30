@@ -58,7 +58,8 @@ export function PosApp() {
   const [showSupplierReturn, setShowSupplierReturn] = useState(false);
   const [showCash, setShowCash] = useState(false);
   const [cashOpen, setCashOpen] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>("CASH");
+  const [showPaymentChoice, setShowPaymentChoice] = useState(false);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [posMode, setPosMode] = useState<"sale" | "return" | "owner">("sale");
   const [discountPercent, setDiscountPercent] = useState(0);
   const [discountInput, setDiscountInput] = useState("");
@@ -90,6 +91,7 @@ export function PosApp() {
   async function switchMode(next: "sale" | "return" | "owner") {
     discountRequestRef.current++;
     await discountQueueRef.current.catch(() => undefined);
+    setShowPaymentChoice(false);
     setPosMode(next);
     setDiscountPercent(0);
     setDiscountInput("");
@@ -105,6 +107,7 @@ export function PosApp() {
 
   function updateDiscountFromInput(value: string) {
     if (!canDiscount) return;
+    setShowPaymentChoice(false);
     setDiscountInput(value);
 
     const raw = value.trim() === "" ? 0 : Number.parseFloat(value);
@@ -257,6 +260,7 @@ export function PosApp() {
   }, [catalogProducts, search]);
 
   async function handleAdd(product: ProductDto) {
+    setShowPaymentChoice(false);
     const listOrCost =
       posMode === "owner" ? product.costCents : effectivePosPriceCents(product);
     const unitCents =
@@ -270,81 +274,102 @@ export function PosApp() {
     searchRef.current?.focus();
   }
 
-  async function handleCheckout() {
+  function checkoutIsValid() {
     if (!staff) return;
     setError("");
     if (posMode === "return" && !can("pos:return")) {
       setError("You do not have permission for customer returns.");
-      return;
+      return false;
     }
     if (posMode === "sale" && !can("pos:sell")) {
       setError("You do not have permission to complete sales.");
-      return;
+      return false;
     }
     if (posMode === "owner" && !can("pos:owner_sale")) {
       setError("You do not have permission for owner / family sales.");
-      return;
+      return false;
     }
     if (posMode === "sale" && discountPercent > 0) {
       if (!can("pos:discount")) {
         setError("You do not have permission to apply discounts.");
-        return;
+        return false;
       }
       if (discountPercent > maxDiscountPercent) {
         setError(`Discount exceeds store maximum of ${maxDiscountPercent}%.`);
-        return;
+        return false;
       }
     }
     if (!cashOpen) {
       setError("Open the cash drawer before completing sales.");
       setShowCash(true);
+      return false;
+    }
+    return true;
+  }
+
+  async function beginCheckout() {
+    if (!checkoutIsValid()) return;
+    if (posMode === "owner") {
+      await completeCheckout("CASH");
       return;
     }
-    const method = posMode === "owner" ? "CASH" : paymentMethod;
+    setShowPaymentChoice(true);
+  }
+
+  async function completeCheckout(method: PaymentMethodCode) {
+    if (!staff || checkoutBusy || !checkoutIsValid()) return;
+    setCheckoutBusy(true);
     const appliedDiscount = posMode === "sale" ? discountPercent : 0;
     const cartSnapshot = await getCart();
-    const sale =
-      posMode === "return"
-        ? await completeReturn(uuid(), staff, method)
-        : await completeSale(
-            uuid(),
-            staff,
-            posMode === "owner" ? "OWNER" : "SALE",
-            appliedDiscount,
-            method,
-          );
-    if (!sale) return;
-    let receiptNumber: string | null = null;
-    if (isOnline()) {
-      await pushPendingSales();
-      const row = await posDb.salesOutbox.get(sale.localId);
-      receiptNumber = row?.receiptNumber ?? null;
-    }
-    setReceipt({
-      ...sale,
-      kind: posMode === "return" ? "RETURN" : posMode === "owner" ? "OWNER" : "SALE",
-      receiptNumber,
-      lines: sale.lines.map((line) => ({
-        ...line,
-        productName: cartSnapshot.find((c) => c.productId === line.productId)?.name ?? "Item",
-      })),
-    });
-    setDiscountPercent(0);
-    setDiscountInput("");
-    setMessage(
-      posMode === "return"
-        ? "Customer return recorded."
-        : posMode === "owner"
-          ? "Owner / family sale recorded at cost."
-          : appliedDiscount > 0
-            ? `Sale recorded with ${appliedDiscount}% discount.`
-            : "",
-    );
-    await refresh();
-    if (isOnline()) {
-      await pushPendingSales();
-      await pullCatalog();
+    try {
+      const sale =
+        posMode === "return"
+          ? await completeReturn(uuid(), staff, method)
+          : await completeSale(
+              uuid(),
+              staff,
+              posMode === "owner" ? "OWNER" : "SALE",
+              appliedDiscount,
+              method,
+            );
+      if (!sale) return;
+      let receiptNumber: string | null = null;
+      if (isOnline()) {
+        await pushPendingSales();
+        const row = await posDb.salesOutbox.get(sale.localId);
+        receiptNumber = row?.receiptNumber ?? null;
+      }
+      setReceipt({
+        ...sale,
+        kind: posMode === "return" ? "RETURN" : posMode === "owner" ? "OWNER" : "SALE",
+        receiptNumber,
+        lines: sale.lines.map((line) => ({
+          ...line,
+          productName: cartSnapshot.find((c) => c.productId === line.productId)?.name ?? "Item",
+        })),
+      });
+      setShowPaymentChoice(false);
+      setDiscountPercent(0);
+      setDiscountInput("");
+      setMessage(
+        posMode === "return"
+          ? "Customer return recorded."
+          : posMode === "owner"
+            ? "Owner / family sale recorded at cost."
+            : appliedDiscount > 0
+              ? `Sale recorded with ${appliedDiscount}% discount.`
+              : "",
+      );
       await refresh();
+      if (isOnline()) {
+        await pushPendingSales();
+        await pullCatalog();
+        await refresh();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not complete checkout.");
+    } finally {
+      setCheckoutBusy(false);
     }
   }
 
@@ -585,15 +610,18 @@ export function PosApp() {
                       <div>{line.name}</div>
                       <div className="pos-cart-qty">
                         <button type="button" className="qty-btn" onClick={async () => {
+                          setShowPaymentChoice(false);
                           await decrementCartLine(line.productId);
                           setCart(await getCart());
                         }}>−</button>
                         <span>{line.quantity}</span>
                         <button type="button" className="qty-btn" onClick={async () => {
+                          setShowPaymentChoice(false);
                           await incrementCartLine(line.productId);
                           setCart(await getCart());
                         }}>+</button>
                         <button type="button" className="remove-btn" onClick={async () => {
+                          setShowPaymentChoice(false);
                           await removeFromCart(line.productId);
                           setCart(await getCart());
                         }}>Remove</button>
@@ -630,23 +658,6 @@ export function PosApp() {
                   <span>{formatMoney(totalCents)}</span>
                 </div>
                 </div>
-                {posMode !== "owner" && (
-                  <div className="pos-payment-methods">
-                    <span className="pos-muted">Payment</span>
-                    <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                      {PAYMENT_METHODS.map((m) => (
-                        <button
-                          key={m.value}
-                          type="button"
-                          className={paymentMethod === m.value ? "btn" : "btn btn-secondary"}
-                          onClick={() => setPaymentMethod(m.value)}
-                        >
-                          {m.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
                 <div className="pos-actions">
                   {(posMode === "sale"
                     ? can("pos:sell")
@@ -656,20 +667,17 @@ export function PosApp() {
                     <button
                       className="btn pos-complete-sale-btn"
                       type="button"
-                      onClick={handleCheckout}
-                      disabled={discountUpdating}
+                      onClick={() => void beginCheckout()}
+                      disabled={discountUpdating || checkoutBusy}
                     >
-                      {posMode === "return"
-                        ? "Complete return"
-                        : posMode === "owner"
-                          ? "Complete owner / family"
-                          : "Complete sale"}
+                      {checkoutBusy ? "Processing…" : "Checkout"}
                     </button>
                   )}
-                  <button className="btn pos-clear-cart-btn" type="button" disabled={discountUpdating} onClick={async () => {
+                  <button className="btn pos-clear-cart-btn" type="button" disabled={discountUpdating || checkoutBusy} onClick={async () => {
                     discountRequestRef.current++;
                     await discountQueueRef.current.catch(() => undefined);
                     await clearCart();
+                    setShowPaymentChoice(false);
                     setDiscountPercent(0);
                     setDiscountInput("");
                     setDiscountError("");
@@ -684,6 +692,34 @@ export function PosApp() {
                     </button>
                   )}
                 </div>
+                {showPaymentChoice && posMode !== "owner" && (
+                  <div className="pos-checkout-payment" role="group" aria-label="Select payment method">
+                    <strong>
+                      Select payment method to complete and preview receipt
+                    </strong>
+                    <div className="pos-checkout-payment-buttons">
+                      {PAYMENT_METHODS.map((method) => (
+                        <button
+                          key={method.value}
+                          type="button"
+                          className="btn pos-payment-choice-btn"
+                          disabled={checkoutBusy}
+                          onClick={() => void completeCheckout(method.value)}
+                        >
+                          {method.label}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={checkoutBusy}
+                        onClick={() => setShowPaymentChoice(false)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </>
           )}
