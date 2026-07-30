@@ -406,6 +406,20 @@ export function PosApp() {
           <span className="pos-muted"> · {staff.staffName}</span>
         </div>
         <div className="pos-topbar-actions">
+          <label className="pos-mode-menu">
+            <span>Mode</span>
+            <select
+              value={posMode}
+              disabled={discountUpdating}
+              onChange={(e) =>
+                void switchMode(e.target.value as "sale" | "return" | "owner")
+              }
+            >
+              {can("pos:sell") && <option value="sale">Sale</option>}
+              {can("pos:return") && <option value="return">Customer return</option>}
+              {can("pos:owner_sale") && <option value="owner">Owner / family</option>}
+            </select>
+          </label>
           <span className={`badge ${online ? "badge-success" : "badge-warning"}`}>
             {online ? "Online" : "Offline"}
           </span>
@@ -528,45 +542,16 @@ export function PosApp() {
           </div>
         </section>
 
-        <section className="pos-panel">
-          <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem", flexWrap: "wrap" }}>
-            {can("pos:sell") && (
-              <button
-                type="button"
-                className={posMode === "sale" ? "btn" : "btn btn-secondary"}
-                onClick={() => void switchMode("sale")}
-              >
-                Sale
-              </button>
-            )}
-            {can("pos:return") && (
-              <button
-                type="button"
-                className={posMode === "return" ? "btn" : "btn btn-secondary"}
-                onClick={() => void switchMode("return")}
-              >
-                Customer return
-              </button>
-            )}
-            {can("pos:owner_sale") && (
-              <button
-                type="button"
-                className={posMode === "owner" ? "btn" : "btn btn-secondary"}
-                onClick={() => void switchMode("owner")}
-              >
-                Owner / family
-              </button>
-            )}
-          </div>
+        <section className="pos-panel pos-cart-panel">
           <h2>Cart</h2>
           {canDiscount && (
             <div className={`pos-discount-row${discountPercent > 0 ? " is-active" : ""}`}>
-              <label className="pos-discount-label">
-                Cart discount
-                <span className="pos-muted"> (percentage, max {maxDiscountPercent}%)</span>
-              </label>
               <div className="pos-discount-controls">
+                <label className="pos-discount-label" htmlFor="pos-cart-discount">
+                  Discount
+                </label>
                 <input
+                  id="pos-cart-discount"
                   type="number"
                   min={0}
                   max={maxDiscountPercent}
@@ -578,45 +563,48 @@ export function PosApp() {
                   onChange={(e) => updateDiscountFromInput(e.target.value)}
                 />
                 <span className="pos-discount-percent">%</span>
-                <span className="pos-muted">Applied automatically · enter 0 to clear</span>
+                <span className="pos-muted">Max {maxDiscountPercent}% · 0 clears</span>
+                {discountPercent > 0 && (
+                  <strong className="pos-discount-active">
+                    Applied
+                    {discountUpdating && "…"}
+                  </strong>
+                )}
               </div>
               {discountError && <div className="pos-discount-error">{discountError}</div>}
-              {discountPercent > 0 && (
-                <div className="pos-discount-active">
-                  <strong>{discountPercent}% discount applied</strong>
-                  {discountUpdating && <span>Updating cart…</span>}
-                </div>
-              )}
             </div>
           )}
           {cart.length === 0 ? (
             <p className="pos-muted">Tap products or scan a barcode to add items.</p>
           ) : (
             <>
-              {cart.map((line) => (
-                <div key={line.productId} className="pos-cart-line">
-                  <div className="pos-cart-line-info">
-                    <div>{line.name}</div>
-                    <div className="pos-cart-qty">
-                      <button type="button" className="qty-btn" onClick={async () => {
-                        await decrementCartLine(line.productId);
-                        setCart(await getCart());
-                      }}>−</button>
-                      <span>{line.quantity}</span>
-                      <button type="button" className="qty-btn" onClick={async () => {
-                        await incrementCartLine(line.productId);
-                        setCart(await getCart());
-                      }}>+</button>
-                      <button type="button" className="remove-btn" onClick={async () => {
-                        await removeFromCart(line.productId);
-                        setCart(await getCart());
-                      }}>Remove</button>
+              <div className="pos-cart-items">
+                {cart.map((line) => (
+                  <div key={line.productId} className="pos-cart-line">
+                    <div className="pos-cart-line-info">
+                      <div>{line.name}</div>
+                      <div className="pos-cart-qty">
+                        <button type="button" className="qty-btn" onClick={async () => {
+                          await decrementCartLine(line.productId);
+                          setCart(await getCart());
+                        }}>−</button>
+                        <span>{line.quantity}</span>
+                        <button type="button" className="qty-btn" onClick={async () => {
+                          await incrementCartLine(line.productId);
+                          setCart(await getCart());
+                        }}>+</button>
+                        <button type="button" className="remove-btn" onClick={async () => {
+                          await removeFromCart(line.productId);
+                          setCart(await getCart());
+                        }}>Remove</button>
+                      </div>
                     </div>
+                    <strong>{formatMoney(line.lineCents)}</strong>
                   </div>
-                  <strong>{formatMoney(line.lineCents)}</strong>
-                </div>
-              ))}
-              <div className="pos-pricing-summary">
+                ))}
+              </div>
+              <div className="pos-cart-footer">
+                <div className="pos-pricing-summary">
                 {posMode === "sale" && discountPercent > 0 && (
                   <>
                     <div className="pos-pricing-row">
@@ -641,60 +629,61 @@ export function PosApp() {
                   </span>
                   <span>{formatMoney(totalCents)}</span>
                 </div>
-              </div>
-              {posMode !== "owner" && (
-                <div className="pos-payment-methods">
-                  <span className="pos-muted">Payment</span>
-                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                    {PAYMENT_METHODS.map((m) => (
-                      <button
-                        key={m.value}
-                        type="button"
-                        className={paymentMethod === m.value ? "btn" : "btn btn-secondary"}
-                        onClick={() => setPaymentMethod(m.value)}
-                      >
-                        {m.label}
-                      </button>
-                    ))}
-                  </div>
                 </div>
-              )}
-              <div className="pos-actions">
-                {(posMode === "sale"
-                  ? can("pos:sell")
-                  : posMode === "return"
-                    ? can("pos:return")
-                    : can("pos:owner_sale")) && (
-                  <button
-                    className="btn pos-complete-sale-btn"
-                    type="button"
-                    onClick={handleCheckout}
-                    disabled={discountUpdating}
-                  >
-                    {posMode === "return"
-                      ? "Complete return"
-                      : posMode === "owner"
-                        ? "Complete owner / family"
-                        : "Complete sale"}
-                  </button>
+                {posMode !== "owner" && (
+                  <div className="pos-payment-methods">
+                    <span className="pos-muted">Payment</span>
+                    <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                      {PAYMENT_METHODS.map((m) => (
+                        <button
+                          key={m.value}
+                          type="button"
+                          className={paymentMethod === m.value ? "btn" : "btn btn-secondary"}
+                          onClick={() => setPaymentMethod(m.value)}
+                        >
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
-                <button className="btn pos-clear-cart-btn" type="button" disabled={discountUpdating} onClick={async () => {
-                  discountRequestRef.current++;
-                  await discountQueueRef.current.catch(() => undefined);
-                  await clearCart();
-                  setDiscountPercent(0);
-                  setDiscountInput("");
-                  setDiscountError("");
-                  setDiscountUpdating(false);
-                  setCart(await getCart());
-                }}>
-                  Clear cart
-                </button>
-                {can("pos:void") && (
-                  <button className="btn btn-secondary" type="button" onClick={handleVoid}>
-                    Void last sale
+                <div className="pos-actions">
+                  {(posMode === "sale"
+                    ? can("pos:sell")
+                    : posMode === "return"
+                      ? can("pos:return")
+                      : can("pos:owner_sale")) && (
+                    <button
+                      className="btn pos-complete-sale-btn"
+                      type="button"
+                      onClick={handleCheckout}
+                      disabled={discountUpdating}
+                    >
+                      {posMode === "return"
+                        ? "Complete return"
+                        : posMode === "owner"
+                          ? "Complete owner / family"
+                          : "Complete sale"}
+                    </button>
+                  )}
+                  <button className="btn pos-clear-cart-btn" type="button" disabled={discountUpdating} onClick={async () => {
+                    discountRequestRef.current++;
+                    await discountQueueRef.current.catch(() => undefined);
+                    await clearCart();
+                    setDiscountPercent(0);
+                    setDiscountInput("");
+                    setDiscountError("");
+                    setDiscountUpdating(false);
+                    setCart(await getCart());
+                  }}>
+                    Clear cart
                   </button>
-                )}
+                  {can("pos:void") && (
+                    <button className="btn btn-secondary" type="button" onClick={handleVoid}>
+                      Void last sale
+                    </button>
+                  )}
+                </div>
               </div>
             </>
           )}

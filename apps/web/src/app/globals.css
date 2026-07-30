@@ -104,7 +104,11 @@ input, select {
 }
 
 .pos-shell {
-  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   background: #0f172a;
   color: #f8fafc;
 }
@@ -123,6 +127,32 @@ input, select {
   display: flex;
   gap: 0.75rem;
   align-items: center;
+}
+
+.pos-mode-menu {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #cbd5e1;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.pos-mode-menu select {
+  min-height: 40px;
+  padding: 0.45rem 2rem 0.45rem 0.65rem;
+  border: 1px solid #475569;
+  border-radius: 7px;
+  background: #0f172a;
+  color: #f8fafc;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.pos-mode-menu select:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
 }
 
 .pos-muted {
@@ -144,6 +174,8 @@ input, select {
 }
 
 .pos-layout {
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: 1fr 360px;
   gap: 1rem;
@@ -157,6 +189,28 @@ input, select {
   padding: 1rem;
   min-height: 400px;
   overflow: auto;
+}
+
+.pos-cart-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pos-cart-items {
+  flex: 1;
+  min-height: 70px;
+  overflow-y: auto;
+  padding-right: 0.35rem;
+  overscroll-behavior: contain;
+}
+
+.pos-cart-footer {
+  flex: 0 0 auto;
+  padding-top: 0.5rem;
+  border-top: 1px solid #334155;
+  background: #1e293b;
 }
 
 .pos-panel h2 {
@@ -214,9 +268,9 @@ input, select {
 
 .pos-pricing-summary {
   display: grid;
-  gap: 0.5rem;
-  margin-top: 1rem;
-  padding: 0.9rem;
+  gap: 0.3rem;
+  margin-top: 0;
+  padding: 0.6rem;
   border: 1px solid #334155;
   border-radius: 8px;
   background: #0f172a;
@@ -233,8 +287,8 @@ input, select {
 }
 
 .pos-discount-row {
-  margin: 0.5rem 0 0.75rem;
-  padding: 0.75rem;
+  margin: 0.25rem 0 0.5rem;
+  padding: 0.45rem 0.55rem;
   border: 1px solid #334155;
   border-radius: 8px;
   background: #0f172a;
@@ -246,26 +300,27 @@ input, select {
 }
 
 .pos-discount-label {
-  display: block;
-  font-size: 0.875rem;
-  margin-bottom: 0.5rem;
+  display: inline;
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
 }
 
 .pos-discount-controls {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.35rem;
   align-items: center;
   flex-wrap: wrap;
 }
 
 .pos-discount-controls input {
-  width: 6.5rem;
-  padding: 0.55rem 0.65rem;
+  width: 4.75rem;
+  padding: 0.35rem 0.45rem;
   border-radius: 6px;
   border: 1px solid #475569;
   background: #1e293b;
   color: #f8fafc;
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   font-weight: 700;
 }
 
@@ -275,36 +330,34 @@ input, select {
 }
 
 .pos-discount-error {
-  margin-top: 0.5rem;
+  margin-top: 0.3rem;
   color: #fca5a5;
   font-size: 0.8125rem;
 }
 
 .pos-discount-active {
-  margin-top: 0.5rem;
-  display: flex;
-  justify-content: space-between;
-  gap: 0.75rem;
+  margin-left: auto;
   font-size: 0.8125rem;
   color: #86efac;
 }
 
 .pos-payment-methods {
-  margin-top: 0.75rem;
+  margin-top: 0.5rem;
   display: grid;
-  gap: 0.5rem;
+  gap: 0.35rem;
 }
 
 .pos-actions {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr auto;
   gap: 0.5rem;
-  margin-top: 1rem;
+  margin-top: 0.5rem;
 }
 
 .pos-complete-sale-btn {
+  grid-column: 1 / -1;
   width: 100%;
-  min-height: 84px;
+  min-height: 76px;
   border-radius: 6px;
   font-size: 1.25rem;
   font-weight: 800;
@@ -312,7 +365,8 @@ input, select {
 }
 
 .pos-clear-cart-btn {
-  align-self: flex-end;
+  grid-column: 2;
+  grid-row: 2;
   min-height: 40px;
   padding: 0.4rem 0.75rem;
   border: 1px solid #ef4444;
