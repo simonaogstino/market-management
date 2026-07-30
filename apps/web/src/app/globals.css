@@ -206,9 +206,30 @@ input, select {
 .pos-total {
   display: flex;
   justify-content: space-between;
-  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #475569;
   font-size: 1.25rem;
   font-weight: 700;
+}
+
+.pos-pricing-summary {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding: 0.9rem;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: #0f172a;
+}
+
+.pos-pricing-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.pos-discount-deduction {
+  color: #86efac;
 }
 
 .pos-discount-row {
@@ -217,6 +238,11 @@ input, select {
   border: 1px solid #334155;
   border-radius: 8px;
   background: #0f172a;
+}
+
+.pos-discount-row.is-active {
+  border-color: #22c55e;
+  box-shadow: inset 3px 0 0 #22c55e;
 }
 
 .pos-discount-label {
@@ -233,16 +259,32 @@ input, select {
 }
 
 .pos-discount-controls input {
-  width: 5.5rem;
-  padding: 0.4rem 0.5rem;
+  width: 6.5rem;
+  padding: 0.55rem 0.65rem;
   border-radius: 6px;
   border: 1px solid #475569;
   background: #1e293b;
   color: #f8fafc;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.pos-discount-percent {
+  margin-left: -0.25rem;
+  font-weight: 700;
+}
+
+.pos-discount-error {
+  margin-top: 0.5rem;
+  color: #fca5a5;
+  font-size: 0.8125rem;
 }
 
 .pos-discount-active {
   margin-top: 0.5rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
   font-size: 0.8125rem;
   color: #86efac;
 }
@@ -254,9 +296,35 @@ input, select {
 }
 
 .pos-actions {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 0.5rem;
   margin-top: 1rem;
+}
+
+.pos-complete-sale-btn {
+  width: 100%;
+  min-height: 84px;
+  border-radius: 6px;
+  font-size: 1.25rem;
+  font-weight: 800;
+  touch-action: manipulation;
+}
+
+.pos-clear-cart-btn {
+  align-self: flex-end;
+  min-height: 40px;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid #ef4444;
+  border-radius: 6px;
+  background: #991b1b;
+  color: #fff;
+  font-size: 0.8rem;
+  touch-action: manipulation;
+}
+
+.pos-clear-cart-btn:hover:not(:disabled) {
+  background: #b91c1c;
 }
 
 .pos-setup {

@@ -62,12 +62,16 @@ export function PosApp() {
   const [posMode, setPosMode] = useState<"sale" | "return" | "owner">("sale");
   const [discountPercent, setDiscountPercent] = useState(0);
   const [discountInput, setDiscountInput] = useState("");
+  const [discountError, setDiscountError] = useState("");
+  const [discountUpdating, setDiscountUpdating] = useState(false);
   const [suppliers, setSuppliers] = useState<Array<{ id: string; name: string }>>([]);
   const [search, setSearch] = useState("");
   const [receipt, setReceipt] = useState<CompletedSale | null>(null);
   const [storeSettings, setStoreSettings] = useState<StoreSettingsDto | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const discountQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const discountRequestRef = useRef(0);
 
   function can(permission: PosPermission) {
     if (!staff) return false;
@@ -84,9 +88,13 @@ export function PosApp() {
   }, [staff?.staffId, staff?.permissions?.join(",")]);
 
   async function switchMode(next: "sale" | "return" | "owner") {
+    discountRequestRef.current++;
+    await discountQueueRef.current.catch(() => undefined);
     setPosMode(next);
     setDiscountPercent(0);
     setDiscountInput("");
+    setDiscountError("");
+    setDiscountUpdating(false);
     await repriceCart(next, 0);
     setCart(await getCart());
   }
@@ -95,31 +103,43 @@ export function PosApp() {
   const canDiscount =
     can("pos:discount") && posMode === "sale" && maxDiscountPercent > 0;
 
-  async function applyDiscountFromInput() {
+  function updateDiscountFromInput(value: string) {
     if (!canDiscount) return;
-    const raw = Number.parseFloat(discountInput);
+    setDiscountInput(value);
+
+    const raw = value.trim() === "" ? 0 : Number.parseFloat(value);
     if (Number.isNaN(raw) || raw < 0) {
-      setError("Enter a valid discount percent.");
+      setDiscountError("Enter a valid discount percent.");
       return;
     }
+
     const capped = Math.min(Math.round(raw * 100) / 100, maxDiscountPercent);
     if (raw > maxDiscountPercent) {
-      setError(`Max discount is ${maxDiscountPercent}%.`);
+      setDiscountError(`Maximum discount is ${maxDiscountPercent}%. Applied at the maximum.`);
     } else {
-      setError("");
+      setDiscountError("");
     }
-    setDiscountPercent(capped);
-    setDiscountInput(capped > 0 ? String(capped) : "");
-    await applyCartDiscount(capped);
-    setCart(await getCart());
-  }
 
-  async function clearDiscount() {
-    setDiscountPercent(0);
-    setDiscountInput("");
-    setError("");
-    await applyCartDiscount(0);
-    setCart(await getCart());
+    setDiscountPercent(capped);
+    const requestId = ++discountRequestRef.current;
+    setDiscountUpdating(true);
+
+    discountQueueRef.current = discountQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        await applyCartDiscount(capped);
+        const nextCart = await getCart();
+        if (requestId === discountRequestRef.current) {
+          setCart(nextCart);
+          setDiscountUpdating(false);
+        }
+      })
+      .catch(() => {
+        if (requestId === discountRequestRef.current) {
+          setDiscountError("Could not update the cart discount. Try again.");
+          setDiscountUpdating(false);
+        }
+      });
   }
 
   function findProductByCode(code: string) {
@@ -367,6 +387,16 @@ export function PosApp() {
   }
 
   const totalCents = cart.reduce((sum, line) => sum + line.lineCents, 0);
+  const subtotalCents =
+    posMode === "sale"
+      ? cart.reduce((sum, line) => {
+          const product = products.find((p) => p.id === line.productId);
+          const unitCents = product ? effectivePosPriceCents(product) : line.unitCents;
+          return sum + line.quantity * unitCents;
+        }, 0)
+      : totalCents;
+  const discountAmountCents =
+    posMode === "sale" ? Math.max(0, subtotalCents - totalCents) : 0;
 
   return (
     <div className="pos-shell">
@@ -463,14 +493,14 @@ export function PosApp() {
                 <div className="pos-price">
                   {posMode === "owner" ? (
                     <>
-                      {formatMoney(product.costCents, storeSettings?.currency)}
+                      {formatMoney(product.costCents)}
                       <span className="pos-muted" style={{ display: "block", fontSize: "0.7rem" }}>
                         at cost
                       </span>
                     </>
                   ) : hasActiveProductDiscount(product) ? (
                     <>
-                      {formatMoney(product.discountPriceCents!, storeSettings?.currency)}
+                      {formatMoney(product.discountPriceCents!)}
                       <span
                         className="pos-muted"
                         style={{
@@ -479,14 +509,14 @@ export function PosApp() {
                           textDecoration: "line-through",
                         }}
                       >
-                        {formatMoney(product.priceCents, storeSettings?.currency)}
+                        {formatMoney(product.priceCents)}
                       </span>
                       <span className="pos-muted" style={{ display: "block", fontSize: "0.7rem" }}>
                         Promo · {product.discountQtyLeft} left
                       </span>
                     </>
                   ) : (
-                    formatMoney(product.priceCents, storeSettings?.currency)
+                    formatMoney(product.priceCents)
                   )}
                 </div>
                 <div className="pos-stock">Stock: {product.stockQty}</div>
@@ -530,10 +560,10 @@ export function PosApp() {
           </div>
           <h2>Cart</h2>
           {canDiscount && (
-            <div className="pos-discount-row">
+            <div className={`pos-discount-row${discountPercent > 0 ? " is-active" : ""}`}>
               <label className="pos-discount-label">
-                Discount %
-                <span className="pos-muted"> (max {maxDiscountPercent}%)</span>
+                Cart discount
+                <span className="pos-muted"> (percentage, max {maxDiscountPercent}%)</span>
               </label>
               <div className="pos-discount-controls">
                 <input
@@ -544,25 +574,18 @@ export function PosApp() {
                   inputMode="decimal"
                   placeholder="0"
                   value={discountInput}
-                  onChange={(e) => setDiscountInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      void applyDiscountFromInput();
-                    }
-                  }}
+                  aria-label="Cart discount percentage"
+                  onChange={(e) => updateDiscountFromInput(e.target.value)}
                 />
-                <button className="btn btn-secondary" type="button" onClick={() => void applyDiscountFromInput()}>
-                  Apply
-                </button>
-                {discountPercent > 0 && (
-                  <button className="btn btn-secondary" type="button" onClick={() => void clearDiscount()}>
-                    Clear
-                  </button>
-                )}
+                <span className="pos-discount-percent">%</span>
+                <span className="pos-muted">Applied automatically · enter 0 to clear</span>
               </div>
+              {discountError && <div className="pos-discount-error">{discountError}</div>}
               {discountPercent > 0 && (
-                <div className="pos-discount-active">{discountPercent}% off applied</div>
+                <div className="pos-discount-active">
+                  <strong>{discountPercent}% discount applied</strong>
+                  {discountUpdating && <span>Updating cart…</span>}
+                </div>
               )}
             </div>
           )}
@@ -590,20 +613,34 @@ export function PosApp() {
                       }}>Remove</button>
                     </div>
                   </div>
-                  <strong>{formatMoney(line.lineCents, storeSettings?.currency)}</strong>
+                  <strong>{formatMoney(line.lineCents)}</strong>
                 </div>
               ))}
-              <div className="pos-total">
-                <span>
-                  {posMode === "return"
-                    ? "Refund total"
-                    : posMode === "owner"
-                      ? "Total at cost"
-                      : discountPercent > 0
-                        ? "Total after discount"
-                        : "Total"}
-                </span>
-                <span>{formatMoney(totalCents, storeSettings?.currency)}</span>
+              <div className="pos-pricing-summary">
+                {posMode === "sale" && discountPercent > 0 && (
+                  <>
+                    <div className="pos-pricing-row">
+                      <span>Subtotal</span>
+                      <span>{formatMoney(subtotalCents)}</span>
+                    </div>
+                    <div className="pos-pricing-row pos-discount-deduction">
+                      <span>Discount deducted ({discountPercent}%)</span>
+                      <strong>−{formatMoney(discountAmountCents)}</strong>
+                    </div>
+                  </>
+                )}
+                <div className="pos-total">
+                  <span>
+                    {posMode === "return"
+                      ? "Refund total"
+                      : posMode === "owner"
+                        ? "Total at cost"
+                        : discountPercent > 0
+                          ? "Final total"
+                          : "Total"}
+                  </span>
+                  <span>{formatMoney(totalCents)}</span>
+                </div>
               </div>
               {posMode !== "owner" && (
                 <div className="pos-payment-methods">
@@ -628,7 +665,12 @@ export function PosApp() {
                   : posMode === "return"
                     ? can("pos:return")
                     : can("pos:owner_sale")) && (
-                  <button className="btn" type="button" onClick={handleCheckout}>
+                  <button
+                    className="btn pos-complete-sale-btn"
+                    type="button"
+                    onClick={handleCheckout}
+                    disabled={discountUpdating}
+                  >
                     {posMode === "return"
                       ? "Complete return"
                       : posMode === "owner"
@@ -636,10 +678,14 @@ export function PosApp() {
                         : "Complete sale"}
                   </button>
                 )}
-                <button className="btn btn-secondary" type="button" onClick={async () => {
+                <button className="btn pos-clear-cart-btn" type="button" disabled={discountUpdating} onClick={async () => {
+                  discountRequestRef.current++;
+                  await discountQueueRef.current.catch(() => undefined);
                   await clearCart();
                   setDiscountPercent(0);
                   setDiscountInput("");
+                  setDiscountError("");
+                  setDiscountUpdating(false);
                   setCart(await getCart());
                 }}>
                   Clear cart
