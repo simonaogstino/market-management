@@ -3,9 +3,9 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "next dev --hostname 0.0.0.0",
+    "dev": "next dev",
     "build": "next build",
-    "start": "next start --hostname 0.0.0.0"
+    "start": "next start"
   },
   "dependencies": {
     "@market/database": "*",
