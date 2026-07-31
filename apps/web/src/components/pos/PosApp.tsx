@@ -29,7 +29,7 @@ import {
   type CompletedSale,
   type StaffSession,
 } from "@/lib/pos-db";
-import { isOnline, pullCatalog, pushPendingSales, runSyncCycle, receiveStock } from "@/lib/pos-sync";
+import { isOnline, pullCatalog, pushPendingSales, runSyncCycle } from "@/lib/pos-sync";
 import { DEFAULT_POS_PERMISSIONS, hasPosPermission, type PosPermission } from "@/lib/permissions";
 import { PosSetup } from "./PosSetup";
 import { PosStaffLogin } from "./PosStaffLogin";
@@ -762,6 +762,7 @@ export function PosApp() {
         <PosReceiveStock
           staff={staff}
           products={products}
+          suppliers={suppliers}
           onClose={() => setShowReceive(false)}
           onSuccess={async (msg) => {
             setMessage(msg);

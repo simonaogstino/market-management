@@ -195,6 +195,38 @@ export async function receiveStock(params: {
   return data as { success: boolean; productName: string; newStockQty: number };
 }
 
+export async function createPosProduct(params: {
+  staffId: string;
+  sku: string;
+  name: string;
+  cost: number;
+  price: number;
+  supplierId: string;
+}) {
+  if (!isOnline()) {
+    throw new Error("Internet required to add a new product.");
+  }
+
+  const response = await apiFetch("/api/pos/products", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+  const data = await response.json();
+  await pullCatalog();
+  return data as {
+    success: boolean;
+    product: {
+      id: string;
+      sku: string;
+      name: string;
+      stockQty: number;
+      supplierId: string | null;
+      costCents: number;
+      priceCents: number;
+    };
+  };
+}
+
 export async function supplierReturnStock(params: {
   staffId: string;
   supplierId: string;

@@ -1,18 +1,22 @@
 "use client";
 
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import type { ProductDto } from "@market/shared";
 import type { StaffSession } from "@/lib/pos-db";
-import { receiveStock } from "@/lib/pos-sync";
+import { createPosProduct, receiveStock } from "@/lib/pos-sync";
+
+type SupplierOption = { id: string; name: string };
 
 export function PosReceiveStock({
   staff,
   products,
+  suppliers,
   onClose,
   onSuccess,
 }: {
   staff: StaffSession;
   products: ProductDto[];
+  suppliers: SupplierOption[];
   onClose: () => void;
   onSuccess: (message: string) => void;
 }) {
@@ -22,21 +26,47 @@ export function PosReceiveStock({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<ProductDto | null>(null);
+  const [creatingNew, setCreatingNew] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newCost, setNewCost] = useState("");
+  const [newPrice, setNewPrice] = useState("");
+  const [newSupplierId, setNewSupplierId] = useState("");
+  const [localProducts, setLocalProducts] = useState(products);
   const skuRef = useRef<HTMLInputElement>(null);
   const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function findBySku(code: string) {
+  useEffect(() => {
+    setLocalProducts(products);
+  }, [products]);
+
+  useEffect(() => {
+    if (!newSupplierId && suppliers.length === 1) {
+      setNewSupplierId(suppliers[0].id);
+    }
+  }, [suppliers, newSupplierId]);
+
+  function findBySku(code: string, list = localProducts) {
     const normalized = code.trim().toLowerCase();
     if (!normalized) return null;
-    return products.find((p) => p.sku.toLowerCase() === normalized) ?? null;
+    return list.find((p) => p.sku.toLowerCase() === normalized) ?? null;
   }
 
   function applySku(code: string) {
-    const product = findBySku(code);
-    setSku(code);
+    const trimmed = code.trim();
+    const product = findBySku(trimmed);
+    setSku(trimmed);
     setSelected(product);
-    if (!product) setError(`Product not found: ${code.trim()}`);
-    else setError("");
+    if (!product && trimmed) {
+      setCreatingNew(true);
+      setError("");
+      setNewName("");
+      setNewCost("");
+      setNewPrice("");
+      if (suppliers.length === 1) setNewSupplierId(suppliers[0].id);
+    } else {
+      setCreatingNew(false);
+      setError("");
+    }
   }
 
   function handleSkuChange(value: string) {
@@ -48,7 +78,10 @@ export function PosReceiveStock({
     setError("");
 
     if (product) {
+      setCreatingNew(false);
       scanTimerRef.current = setTimeout(() => applySku(value), 120);
+    } else if (!value.trim()) {
+      setCreatingNew(false);
     }
   }
 
@@ -57,8 +90,75 @@ export function PosReceiveStock({
     e.preventDefault();
     if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
     applySku(e.currentTarget.value);
-    if (!findBySku(e.currentTarget.value)) return;
-    document.getElementById("receive-qty")?.focus();
+    if (findBySku(e.currentTarget.value)) {
+      document.getElementById("receive-qty")?.focus();
+    } else if (e.currentTarget.value.trim()) {
+      document.getElementById("new-product-name")?.focus();
+    }
+  }
+
+  async function createNewProduct() {
+    const trimmedSku = sku.trim();
+    if (!trimmedSku) {
+      setError("Scan or enter a SKU first.");
+      return null;
+    }
+    if (!newName.trim()) {
+      setError("Enter a product name.");
+      return null;
+    }
+    if (!newSupplierId) {
+      setError("Select the supplier that supplied this product.");
+      return null;
+    }
+    const cost = parseFloat(newCost);
+    const price = parseFloat(newPrice);
+    if (Number.isNaN(cost) || cost < 0) {
+      setError("Enter a valid cost.");
+      return null;
+    }
+    if (Number.isNaN(price) || price < 0) {
+      setError("Enter a valid sale price.");
+      return null;
+    }
+
+    const result = await createPosProduct({
+      staffId: staff.staffId,
+      sku: trimmedSku,
+      name: newName.trim(),
+      cost,
+      price,
+      supplierId: newSupplierId,
+    });
+
+    const created: ProductDto = {
+      id: result.product.id,
+      sku: result.product.sku,
+      name: result.product.name,
+      description: null,
+      costCents: result.product.costCents,
+      priceCents: result.product.priceCents,
+      appPriceCents: result.product.priceCents,
+      discountPriceCents: null,
+      discountQtyLeft: 0,
+      stockQty: result.product.stockQty,
+      categoryId: null,
+      supplierId: result.product.supplierId,
+      showOnPos: true,
+      showOnApps: false,
+      isActive: true,
+      version: 1,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setLocalProducts((prev) => {
+      if (prev.some((p) => p.id === created.id)) return prev;
+      return [...prev, created];
+    });
+    setSelected(created);
+    setCreatingNew(false);
+    setError("");
+    return created;
   }
 
   async function onSubmit(e: FormEvent) {
@@ -66,21 +166,30 @@ export function PosReceiveStock({
     setLoading(true);
     setError("");
 
-    const product = selected ?? findBySku(sku);
-    if (!product) {
-      setError(`Product not found: ${sku.trim()}`);
-      setLoading(false);
-      return;
-    }
-
-    const qty = parseInt(quantity, 10);
-    if (!qty || qty <= 0) {
-      setError("Enter a positive quantity.");
-      setLoading(false);
-      return;
-    }
-
     try {
+      let product = selected ?? findBySku(sku);
+
+      if (!product && creatingNew) {
+        product = await createNewProduct();
+        if (!product) {
+          setLoading(false);
+          return;
+        }
+      }
+
+      if (!product) {
+        setError(`Product not found: ${sku.trim()}`);
+        setLoading(false);
+        return;
+      }
+
+      const qty = parseInt(quantity, 10);
+      if (!qty || qty <= 0) {
+        setError("Enter a positive quantity.");
+        setLoading(false);
+        return;
+      }
+
       const result = await receiveStock({
         staffId: staff.staffId,
         sku: product.sku,
@@ -121,12 +230,87 @@ export function PosReceiveStock({
               autoComplete="off"
             />
           </label>
-          {selected && (
+
+          {selected && !creatingNew && (
             <div className="pos-receive-product">
               <strong>{selected.name}</strong>
               <div className="pos-muted">Current stock: {selected.stockQty}</div>
             </div>
           )}
+
+          {creatingNew && (
+            <div className="pos-receive-new-product">
+              <p className="pos-receive-new-banner">
+                New product — not in the system yet. Add it, choose the supplier, then confirm receive.
+              </p>
+              {suppliers.length === 0 ? (
+                <p className="pos-error">
+                  No active suppliers. Add a supplier in Admin before creating products on POS.
+                </p>
+              ) : (
+                <>
+                  <label>
+                    Product name
+                    <input
+                      id="new-product-name"
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      placeholder="Product name"
+                      required
+                    />
+                  </label>
+                  <label>
+                    Supplier
+                    <select
+                      value={newSupplierId}
+                      onChange={(e) => setNewSupplierId(e.target.value)}
+                      required
+                    >
+                      <option value="">Select supplier…</option>
+                      {suppliers.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Cost (IQD)
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={newCost}
+                      onChange={(e) => setNewCost(e.target.value)}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Sale price (IQD)
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={newPrice}
+                      onChange={(e) => setNewPrice(e.target.value)}
+                      required
+                    />
+                  </label>
+                </>
+              )}
+            </div>
+          )}
+
+          {!creatingNew && !selected && sku.trim() && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => applySku(sku)}
+            >
+              Add as new product
+            </button>
+          )}
+
           <label>
             Quantity received
             <input
@@ -147,8 +331,20 @@ export function PosReceiveStock({
             />
           </label>
           {error && <p className="pos-error">{error}</p>}
-          <button className="btn" type="submit" disabled={loading || !selected}>
-            {loading ? "Saving…" : "Confirm receive"}
+          <button
+            className="btn"
+            type="submit"
+            disabled={
+              loading ||
+              (!selected && !creatingNew) ||
+              (creatingNew && suppliers.length === 0)
+            }
+          >
+            {loading
+              ? "Saving…"
+              : creatingNew
+                ? "Add product & receive"
+                : "Confirm receive"}
           </button>
         </form>
       </div>
