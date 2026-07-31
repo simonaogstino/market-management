@@ -1,5 +1,5 @@
-import { copyFileSync, existsSync, mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { copyFileSync, existsSync, mkdirSync } from "fs";
+import { dirname, join } from "path";
 
 const globalEnsure = globalThis as unknown as {
   __marketDbEnsured?: boolean;
@@ -54,6 +54,8 @@ function installTemplateDb(root: string, targetUrl: string) {
 /**
  * Ensures SQLite has tables + seed data.
  * Uses a committed template DB copy (no prisma CLI needed at runtime) — required for Airo.
+ *
+ * Node-only: do not import this module from Edge or client code.
  */
 export async function ensureDatabase() {
   console.info("[INFO] ensureDatabase: start");

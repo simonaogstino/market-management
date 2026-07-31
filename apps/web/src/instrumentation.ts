@@ -1,7 +1,7 @@
 /**
- * Keep this file free of Node built-ins (fs/path) and of `@/lib/logger`.
+ * Keep this file free of Node built-ins (fs/path) and of ensure-database.
  * Next compiles instrumentation for Edge as well; importing fs there breaks the build.
- * File logging is used from API routes, auth, and sync (Node-only server code).
+ * DB ensure runs from auth / terminal API routes (Node runtime) instead.
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
@@ -9,13 +9,6 @@ export async function register() {
   console.info(
     `[INFO] App started nodeEnv=${process.env.NODE_ENV ?? "unknown"} databaseUrlSet=${Boolean(process.env.DATABASE_URL?.trim())}`,
   );
-
-  try {
-    const { ensureDatabase } = await import("./ensure-database");
-    await ensureDatabase();
-  } catch (err) {
-    console.error("[ERROR] Database ensure failed", err);
-  }
 
   process.on("uncaughtException", (err) => {
     console.error("[ERROR] uncaughtException", err);
