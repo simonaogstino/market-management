@@ -1,10 +1,11 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync } from "fs";
+import { execSync } from "child_process";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from "fs";
 import { dirname, join } from "path";
 
-export const DB_ENSURE_VERSION = "2026-07-31-v4";
+export const DB_ENSURE_VERSION = "2026-07-31-v5";
 
 const globalEnsure = globalThis as unknown as {
-  __marketDbEnsured?: boolean;
+  __marketDbEnsuredVersion?: string;
   __marketDbEnsurePromise?: Promise<void>;
 };
 
@@ -28,14 +29,7 @@ function sqlitePathFromUrl(url: string): string | null {
 
 function candidateRoots(): string[] {
   const cwd = process.cwd();
-  const roots = [
-    cwd,
-    join(cwd, ".."),
-    join(cwd, "../.."),
-    "/app",
-    "/git-repo",
-  ];
-  // de-dupe
+  const roots = [cwd, join(cwd, ".."), join(cwd, "../.."), "/app", "/git-repo"];
   return [...new Set(roots.map((r) => join(r)))];
 }
 
@@ -48,13 +42,11 @@ function findTemplateDb(): string | null {
     }
   }
 
-  // Last resort: search a couple levels for the filename
   for (const root of ["/app", process.cwd()]) {
     try {
       const prismaDir = join(root, "packages", "database", "prisma");
       if (!existsSync(prismaDir)) continue;
       const names = readdirSync(prismaDir);
-      console.info(`[INFO] ensureDatabase: prisma dir ${prismaDir} files=${names.join(",")}`);
       if (names.includes("airo-template.db")) {
         return join(prismaDir, "airo-template.db");
       }
@@ -68,8 +60,10 @@ function findTemplateDb(): string | null {
 async function tablesReady(): Promise<boolean> {
   try {
     const { getPrisma } = await import("@market/database");
-    await getPrisma().$queryRaw`SELECT 1 FROM User LIMIT 1`;
-    await getPrisma().$queryRaw`SELECT 1 FROM Terminal LIMIT 1`;
+    const db = getPrisma();
+    await db.$queryRaw`SELECT 1 FROM User LIMIT 1`;
+    await db.$queryRaw`SELECT 1 FROM Terminal LIMIT 1`;
+    await db.$queryRaw`SELECT 1 FROM CashSession LIMIT 1`;
     return true;
   } catch (err) {
     if (schemaMissing(err)) return false;
@@ -78,10 +72,28 @@ async function tablesReady(): Promise<boolean> {
   }
 }
 
+function tryPrismaDbPush(root: string): boolean {
+  const schema = join(root, "packages", "database", "prisma", "schema.prisma");
+  const dbPkg = join(root, "packages", "database");
+  if (!existsSync(schema)) return false;
+  try {
+    console.info("[INFO] ensureDatabase: applying schema via prisma db push");
+    execSync(`npx prisma db push --schema "${schema}" --skip-generate`, {
+      cwd: dbPkg,
+      stdio: "inherit",
+      env: process.env,
+      shell: true,
+    });
+    return true;
+  } catch (err) {
+    console.warn("[WARN] ensureDatabase: prisma db push failed", err);
+    return false;
+  }
+}
+
 function installTemplateDb(template: string, targetUrl: string) {
   const targetPath = sqlitePathFromUrl(targetUrl);
   if (!targetPath) {
-    // Point DATABASE_URL at the template itself.
     process.env.DATABASE_URL = `file:${template}`;
     console.info(`[INFO] ensureDatabase: pointing DATABASE_URL at template ${template}`);
     return;
@@ -92,25 +104,30 @@ function installTemplateDb(template: string, targetUrl: string) {
     return;
   }
 
+  const existingSize = existsSync(targetPath) ? statSync(targetPath).size : 0;
+  // Don't wipe a real local DB that already has data — only seed empty/tiny files.
+  if (existingSize >= 10_000) {
+    console.warn(
+      `[WARN] ensureDatabase: refusing to overwrite existing DB (${existingSize} bytes); use db push instead`,
+    );
+    return;
+  }
+
   try {
     mkdirSync(dirname(targetPath), { recursive: true });
     copyFileSync(template, targetPath);
     console.info(`[INFO] ensureDatabase: copied template -> ${targetPath}`);
   } catch (err) {
-    // Sandbox may block writes — fall back to reading the template file directly.
     console.warn("[WARN] ensureDatabase: copy failed, using template path directly", err);
     process.env.DATABASE_URL = `file:${template}`;
   }
 }
 
-/**
- * Ensures SQLite has tables + seed data.
- * Uses committed `airo-template.db` (no prisma CLI needed).
- */
+/** Ensures SQLite has required tables (including CashSession). */
 export async function ensureDatabase() {
   console.info(`[INFO] ensureDatabase: start version=${DB_ENSURE_VERSION} cwd=${process.cwd()}`);
 
-  if (globalEnsure.__marketDbEnsured) {
+  if (globalEnsure.__marketDbEnsuredVersion === DB_ENSURE_VERSION) {
     console.info("[INFO] ensureDatabase: already ready");
     return;
   }
@@ -144,36 +161,44 @@ export async function ensureDatabase() {
     await resetPrismaClient();
 
     if (await tablesReady()) {
-      globalEnsure.__marketDbEnsured = true;
+      globalEnsure.__marketDbEnsuredVersion = DB_ENSURE_VERSION;
       console.info("[INFO] ensureDatabase: schema already present");
+      return;
+    }
+
+    // Prefer non-destructive schema sync for existing databases.
+    tryPrismaDbPush(root);
+    await resetPrismaClient();
+    if (await tablesReady()) {
+      globalEnsure.__marketDbEnsuredVersion = DB_ENSURE_VERSION;
+      console.info("[INFO] ensureDatabase: ready after db push");
       return;
     }
 
     const template = findTemplateDb();
     if (!template) {
       throw new Error(
-        `Tables missing and airo-template.db not found. Set DATABASE_URL to the seeded template. cwd=${process.cwd()}`,
+        `Cash/User tables missing and airo-template.db not found. Run: npm run db:push`,
       );
     }
 
-    console.info("[INFO] ensureDatabase: tables missing — installing template");
+    console.info("[INFO] ensureDatabase: tables missing — installing template if DB is empty");
     installTemplateDb(template, process.env.DATABASE_URL!);
     normalizeSqliteDatabaseUrl(root);
     await resetPrismaClient();
 
     if (!(await tablesReady())) {
-      // Final fallback: use template file as the live database.
       process.env.DATABASE_URL = `file:${template}`;
       console.info(`[INFO] ensureDatabase: final fallback DATABASE_URL=${process.env.DATABASE_URL}`);
       await resetPrismaClient();
       if (!(await tablesReady())) {
         throw new Error(
-          `Database still empty after template install (DATABASE_URL=${process.env.DATABASE_URL})`,
+          `Database schema incomplete (need CashSession). Run: npm run db:push (DATABASE_URL=${process.env.DATABASE_URL})`,
         );
       }
     }
 
-    globalEnsure.__marketDbEnsured = true;
+    globalEnsure.__marketDbEnsuredVersion = DB_ENSURE_VERSION;
     console.info("[INFO] ensureDatabase: ready");
   })();
 

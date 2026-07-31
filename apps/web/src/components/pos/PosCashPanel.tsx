@@ -38,8 +38,24 @@ async function cashFetch(path: string, init?: RequestInit) {
       ...(init?.headers ?? {}),
     },
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? "Request failed");
+
+  const text = await res.text();
+  let data: { error?: string; session?: SessionPayload | null; movement?: unknown } = {};
+  if (text) {
+    try {
+      data = JSON.parse(text) as typeof data;
+    } catch {
+      throw new Error(
+        res.ok
+          ? "Invalid response from cash API."
+          : text.slice(0, 160).trim() || `Cash API error ${res.status}`,
+      );
+    }
+  }
+
+  if (!res.ok) {
+    throw new Error(data.error ?? `Cash API error ${res.status}`);
+  }
   return data;
 }
 
