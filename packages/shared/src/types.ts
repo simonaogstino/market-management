@@ -151,7 +151,7 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 /** App currency is fixed to Iraqi Dinar. */
 export const APP_CURRENCY = "IQD" as const;
 
-export function formatMoney(cents: number, _currency = APP_CURRENCY) {
+export function formatMoney(cents: number, _currency: string = APP_CURRENCY) {
   const amount = cents / 100;
   // IQD is displayed as whole dinars (no fractional fils in everyday use).
   const formatted = Math.round(amount).toLocaleString("en-IQ");

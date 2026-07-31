@@ -31,7 +31,7 @@ export const TIMEZONE_OPTIONS = [
   { value: "America/New_York", label: "Eastern (US)" },
 ] as const;
 
-export function formatMoney(cents: number, currency = APP_CURRENCY) {
+export function formatMoney(cents: number, currency: string = APP_CURRENCY) {
   return formatMoneyShared(cents, currency);
 }
 
