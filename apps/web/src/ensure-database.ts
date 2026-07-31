@@ -1,23 +1,10 @@
 import { execSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 
 const globalEnsure = globalThis as unknown as {
   __marketDbEnsured?: boolean;
   __marketDbEnsurePromise?: Promise<void>;
 };
-
-function findMonorepoRoot(): string {
-  let dir = process.cwd();
-  for (;;) {
-    if (existsSync(join(dir, "packages", "database", "prisma", "schema.prisma"))) {
-      return dir;
-    }
-    const parent = dirname(dir);
-    if (parent === dir) return process.cwd();
-    dir = parent;
-  }
-}
 
 function schemaMissing(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
@@ -26,8 +13,8 @@ function schemaMissing(err: unknown): boolean {
 
 async function tablesReady(): Promise<boolean> {
   try {
-    const { prisma } = await import("@market/database");
-    await prisma.terminal.findFirst();
+    const { getPrisma } = await import("@market/database");
+    await getPrisma().user.findFirst();
     return true;
   } catch (err) {
     if (schemaMissing(err)) return false;
@@ -36,17 +23,22 @@ async function tablesReady(): Promise<boolean> {
 }
 
 async function applySchemaAndSeed(root: string) {
-  console.info("[INFO] Database schema missing — running prisma db push + seed");
+  const schema = join(root, "packages", "database", "prisma", "schema.prisma");
+  const dbPkg = join(root, "packages", "database");
 
-  execSync("npm run db:push", {
-    cwd: root,
+  console.info("[INFO] Database schema missing — running prisma db push + seed");
+  console.info(`[INFO] schema=${schema}`);
+  console.info(`[INFO] DATABASE_URL=${process.env.DATABASE_URL}`);
+
+  execSync(`npx prisma db push --schema "${schema}" --skip-generate --accept-data-loss`, {
+    cwd: dbPkg,
     stdio: "inherit",
     env: process.env,
     shell: true,
   });
 
-  execSync("npm run db:seed", {
-    cwd: root,
+  execSync("npx tsx prisma/seed.ts", {
+    cwd: dbPkg,
     stdio: "inherit",
     env: process.env,
     shell: true,
@@ -67,17 +59,29 @@ export async function ensureDatabase() {
       return;
     }
 
-    const root = findMonorepoRoot();
+    const {
+      findMonorepoRootFromCwd,
+      normalizeSqliteDatabaseUrl,
+      resetPrismaClient,
+    } = await import("@market/database");
+
+    const root = findMonorepoRootFromCwd();
+    normalizeSqliteDatabaseUrl(root);
+    await resetPrismaClient();
 
     if (await tablesReady()) {
       globalEnsure.__marketDbEnsured = true;
+      console.info("[INFO] Database schema already present");
       return;
     }
 
     await applySchemaAndSeed(root);
+    await resetPrismaClient();
 
     if (!(await tablesReady())) {
-      throw new Error("Database schema still missing after db:push");
+      throw new Error(
+        `Database schema still missing after db:push (DATABASE_URL=${process.env.DATABASE_URL})`,
+      );
     }
 
     globalEnsure.__marketDbEnsured = true;
