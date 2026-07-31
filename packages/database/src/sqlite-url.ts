@@ -1,13 +1,28 @@
-import { isAbsolute, join, resolve } from "node:path";
+/**
+ * Path helpers without Node builtins so this module is safe if pulled into a
+ * Next client/edge graph via `@market/database`.
+ */
+
+function isAbsolutePath(filePath: string): boolean {
+  return filePath.startsWith("/") || /^[A-Za-z]:[\\/]/.test(filePath);
+}
+
+function joinPath(...parts: string[]): string {
+  return parts
+    .filter(Boolean)
+    .map((p, i) => {
+      const n = p.replace(/\\/g, "/");
+      if (i === 0) return n.replace(/\/+$/, "");
+      return n.replace(/^\/+|\/+$/g, "");
+    })
+    .filter(Boolean)
+    .join("/");
+}
 
 /**
  * Prisma CLI resolves relative `file:` URLs against the schema directory.
  * Prisma Client resolves them against `process.cwd()`.
- * On hosts like Airo those differ, so relative URLs create/read different DB files.
  * Force an absolute `file:` URL before any Prisma usage.
- *
- * Avoid `fs` here — `@market/database` is imported by Next server code and must not
- * pull Node builtins into Edge/instrumentation webpack graphs.
  */
 export function normalizeSqliteDatabaseUrl(monorepoRoot?: string): string | undefined {
   const raw = process.env.DATABASE_URL?.trim();
@@ -30,10 +45,15 @@ export function normalizeSqliteDatabaseUrl(monorepoRoot?: string): string | unde
     filePath = filePath.slice(2);
   }
 
-  if (!isAbsolute(filePath)) {
-    const root = monorepoRoot ?? findMonorepoRootFromCwd();
+  if (!isAbsolutePath(filePath)) {
+    const root = (monorepoRoot ?? findMonorepoRootFromCwd()).replace(/\\/g, "/");
     const rel = filePath.replace(/^\.\//, "");
-    filePath = resolve(join(root, "packages", "database", "prisma", rel));
+    filePath = joinPath(root, "packages", "database", "prisma", rel);
+  }
+
+  // Windows: Prisma accepts file:C:\path\...
+  if (/^[A-Za-z]:\//.test(filePath)) {
+    filePath = filePath.replace(/\//g, "\\");
   }
 
   const normalized = `file:${filePath}`;
@@ -45,18 +65,18 @@ export function normalizeSqliteDatabaseUrl(monorepoRoot?: string): string | unde
 }
 
 export function findMonorepoRootFromCwd(): string {
-  const cwd = process.cwd().replace(/\\/g, "/");
+  const cwd = typeof process !== "undefined" ? process.cwd() : ".";
+  const norm = cwd.replace(/\\/g, "/");
 
-  if (cwd.endsWith("/apps/web")) {
-    return resolve(process.cwd(), "../..");
+  if (norm.endsWith("/apps/web")) {
+    return cwd.replace(/[/\\]apps[/\\]web$/i, "");
   }
-  if (cwd.endsWith("/packages/database")) {
-    return resolve(process.cwd(), "../..");
+  if (norm.endsWith("/packages/database")) {
+    return cwd.replace(/[/\\]packages[/\\]database$/i, "");
   }
-  if (cwd.endsWith("/packages/database/prisma")) {
-    return resolve(process.cwd(), "../../..");
+  if (norm.endsWith("/packages/database/prisma")) {
+    return cwd.replace(/[/\\]packages[/\\]database[/\\]prisma$/i, "");
   }
 
-  // Assume cwd is already the monorepo root (npm run from repo root).
-  return process.cwd();
+  return cwd;
 }

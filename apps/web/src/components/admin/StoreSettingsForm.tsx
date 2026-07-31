@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateStoreSettings } from "@/lib/actions/admin";
-import type { StoreSettings } from "@/lib/store-settings";
-import { TIMEZONE_OPTIONS } from "@/lib/store-settings";
+import type { StoreSettings } from "@/lib/store-settings-shared";
+import { TIMEZONE_OPTIONS } from "@/lib/store-settings-shared";
 
 export function StoreSettingsForm({
   settings,
