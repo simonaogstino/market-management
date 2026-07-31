@@ -82,7 +82,7 @@ export const POS_PERMISSION_GROUPS = [
       { key: "pos:return", label: "Customer returns" },
       { key: "pos:discount", label: "Apply custom discount" },
       { key: "pos:owner_sale", label: "Owner / family at cost" },
-      { key: "pos:void", label: "Void last sale" },
+      { key: "pos:void", label: "Void last sale (legacy)" },
     ],
   },
   {

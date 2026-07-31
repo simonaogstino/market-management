@@ -20,7 +20,12 @@ const DEFAULT_STORE: StoreSettingsDto = {
   maxDiscountPercent: 0,
 };
 
-function receiptTitle(kind?: string) {
+function receiptTitle(kind?: string, reprint?: boolean) {
+  if (reprint) {
+    if (kind === "RETURN") return "Return receipt";
+    if (kind === "OWNER") return "Owner / family receipt";
+    return "Receipt reprint";
+  }
   if (kind === "RETURN") return "Return complete";
   if (kind === "OWNER") return "Owner / family complete";
   return "Sale complete";
@@ -30,17 +35,18 @@ export function PosReceipt({
   sale,
   terminalName,
   store,
+  reprint = false,
   onClose,
 }: {
   sale: CompletedSale;
   terminalName: string;
   store?: StoreSettingsDto | null;
+  reprint?: boolean;
   onClose: () => void;
 }) {
   const printRef = useRef<HTMLDivElement>(null);
   const s = store ?? DEFAULT_STORE;
   const header = s.receiptHeader?.trim() || s.name;
-  const currency = s.currency;
 
   function handlePrint() {
     window.print();
@@ -55,7 +61,7 @@ export function PosReceipt({
   return (
     <div className="pos-modal-overlay">
       <div className="pos-modal">
-        <h2>{receiptTitle(sale.kind)}</h2>
+        <h2>{receiptTitle(sale.kind, reprint)}</h2>
         <div className="pos-receipt" ref={printRef}>
           <div className="receipt-header">
             <strong>{header}</strong>
@@ -89,9 +95,9 @@ export function PosReceipt({
           {sale.lines.map((line, i) => (
             <div key={i} className="receipt-line">
               <span>
-                {line.productName ?? "Item"} {line.quantity}× {formatMoney(line.unitCents, currency)}
+                {line.productName ?? "Item"} {line.quantity}× {formatMoney(line.unitCents)}
               </span>
-              <span>{formatMoney(line.lineCents, currency)}</span>
+              <span>{formatMoney(line.lineCents)}</span>
             </div>
           ))}
           <hr />
@@ -100,7 +106,7 @@ export function PosReceipt({
               {sale.subtotalCents != null && (
                 <div className="receipt-line">
                   <span>Subtotal</span>
-                  <span>{formatMoney(sale.subtotalCents, currency)}</span>
+                  <span>{formatMoney(sale.subtotalCents)}</span>
                 </div>
               )}
               <div className="receipt-line">
@@ -109,7 +115,6 @@ export function PosReceipt({
                   −
                   {formatMoney(
                     Math.max(0, (sale.subtotalCents ?? sale.totalCents) - sale.totalCents),
-                    currency,
                   )}
                 </span>
               </div>
@@ -119,7 +124,7 @@ export function PosReceipt({
             <span>
               {sale.kind === "RETURN" ? "Refund" : sale.kind === "OWNER" ? "Total at cost" : "Total"}
             </span>
-            <strong>{formatMoney(sale.totalCents, currency)}</strong>
+            <strong>{formatMoney(sale.totalCents)}</strong>
           </div>
           <p className="receipt-thanks">
             {sale.kind === "RETURN"
@@ -134,7 +139,7 @@ export function PosReceipt({
             Print receipt
           </button>
           <button className="btn btn-secondary" type="button" onClick={onClose}>
-            Continue
+            {reprint ? "Close" : "Continue"}
           </button>
         </div>
       </div>

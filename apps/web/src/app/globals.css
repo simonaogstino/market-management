@@ -383,6 +383,46 @@ input, select {
   margin-top: 0.5rem;
 }
 
+.pos-history-panel {
+  width: min(560px, 94vw);
+  max-height: 85vh;
+  overflow: auto;
+}
+
+.pos-history-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.pos-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: #0f172a;
+}
+
+.pos-history-item-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.pos-history-item-title {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.pos-history-item-amount {
+  margin-top: 0.25rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
 .pos-complete-sale-btn {
   grid-column: 1 / -1;
   width: 100%;
@@ -532,6 +572,13 @@ input, select {
   flex: 1;
 }
 
+.pos-cart-line-total {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+}
+
 .pos-cart-qty {
   display: flex;
   align-items: center;
@@ -539,8 +586,7 @@ input, select {
   margin-top: 0.35rem;
 }
 
-.qty-btn,
-.remove-btn {
+.qty-btn {
   padding: 0.25rem 0.5rem;
   border: 1px solid #334155;
   border-radius: 6px;
@@ -550,8 +596,22 @@ input, select {
 }
 
 .remove-btn {
-  margin-left: 0.25rem;
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid #7f1d1d;
+  border-radius: 6px;
+  background: #450a0a;
   color: #fca5a5;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.remove-btn:hover {
+  background: #7f1d1d;
+  color: #fff;
 }
 
 .pos-error-banner {

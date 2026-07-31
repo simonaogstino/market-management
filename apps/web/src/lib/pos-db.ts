@@ -16,8 +16,10 @@ export interface SaleOutbox {
   totalCents: number;
   kind: "SALE" | "RETURN" | "OWNER";
   discountPercent?: number;
+  /** Pre-discount subtotal when a cart discount was applied. */
+  subtotalCents?: number;
   paymentMethod?: "CASH" | "CARD" | "TRANSFER";
-  lines: SaleLineDto[];
+  lines: Array<SaleLineDto & { productName?: string }>;
   syncStatus: "pending" | "synced" | "conflict";
   conflictJson?: string;
   createdAt: string;
@@ -284,11 +286,12 @@ export async function completeSale(
 
   const totalCents = cart.reduce((sum, line) => sum + line.lineCents, 0);
   const soldAt = new Date().toISOString();
-  const lines: SaleLineDto[] = cart.map((line) => ({
+  const lines: Array<SaleLineDto & { productName?: string }> = cart.map((line) => ({
     productId: line.productId,
     quantity: line.quantity,
     unitCents: line.unitCents,
     lineCents: line.lineCents,
+    productName: line.name,
   }));
 
   let subtotalCents: number | undefined;
@@ -309,6 +312,7 @@ export async function completeSale(
     totalCents,
     kind,
     discountPercent: kind === "SALE" && discountPercent > 0 ? discountPercent : undefined,
+    subtotalCents,
     paymentMethod: method,
     lines,
     syncStatus: "pending",
@@ -365,11 +369,12 @@ export async function completeReturn(
 
   const totalCents = cart.reduce((sum, line) => sum + line.lineCents, 0);
   const soldAt = new Date().toISOString();
-  const lines: SaleLineDto[] = cart.map((line) => ({
+  const lines: Array<SaleLineDto & { productName?: string }> = cart.map((line) => ({
     productId: line.productId,
     quantity: line.quantity,
     unitCents: line.unitCents,
     lineCents: line.lineCents,
+    productName: line.name,
   }));
 
   await posDb.salesOutbox.put({
@@ -457,8 +462,61 @@ export async function getConflictSales() {
 }
 
 export async function getLastVoidableSale(): Promise<SaleOutbox | null> {
-  const sales = await posDb.salesOutbox.orderBy("soldAt").reverse().toArray();
+  // soldAt is not an IndexedDB index. Sort in memory so this works with all
+  // existing POS database versions without requiring a destructive reset.
+  const sales = await posDb.salesOutbox.toArray();
+  sales.sort((a, b) => b.soldAt.localeCompare(a.soldAt));
   return sales.find((s) => !s.voided) ?? null;
+}
+
+function dayKeyInTimezone(iso: string, timezone: string) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(iso));
+}
+
+/** Non-voided sales from this terminal for the current local store day. */
+export async function getTodaysSales(timezone = "UTC"): Promise<SaleOutbox[]> {
+  const today = dayKeyInTimezone(new Date().toISOString(), timezone);
+  const sales = await posDb.salesOutbox.toArray();
+  return sales
+    .filter((s) => !s.voided && dayKeyInTimezone(s.soldAt, timezone) === today)
+    .sort((a, b) => b.soldAt.localeCompare(a.soldAt));
+}
+
+export async function toCompletedSale(sale: SaleOutbox): Promise<CompletedSale> {
+  const lines = await Promise.all(
+    sale.lines.map(async (line) => {
+      const productName =
+        line.productName ??
+        (await posDb.products.get(line.productId))?.name ??
+        "Item";
+      return {
+        productId: line.productId,
+        quantity: line.quantity,
+        unitCents: line.unitCents,
+        lineCents: line.lineCents,
+        productName,
+      };
+    }),
+  );
+
+  return {
+    localId: sale.localId,
+    soldAt: sale.soldAt,
+    totalCents: sale.totalCents,
+    kind: sale.kind,
+    discountPercent: sale.discountPercent,
+    paymentMethod: sale.paymentMethod,
+    subtotalCents: sale.subtotalCents,
+    lines,
+    staffId: sale.staffId,
+    staffName: sale.staffName,
+    receiptNumber: sale.receiptNumber ?? null,
+  };
 }
 
 async function restoreLocalStock(lines: SaleLineDto[]) {

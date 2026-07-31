@@ -78,7 +78,12 @@ export async function pushPendingSales() {
       kind: sale.kind ?? "SALE",
       discountPercent: sale.discountPercent,
       paymentMethod: sale.paymentMethod ?? "CASH",
-      lines: sale.lines,
+      lines: sale.lines.map((line) => ({
+        productId: line.productId,
+        quantity: line.quantity,
+        unitCents: line.unitCents,
+        lineCents: line.lineCents,
+      })),
       staffId: sale.staffId,
       staffName: sale.staffName,
     })),

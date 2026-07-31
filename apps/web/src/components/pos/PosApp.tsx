@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuid } from "uuid";
+import { Trash2 } from "lucide-react";
 import type { ProductDto, StoreSettingsDto } from "@market/shared";
 import { SYNC_INTERVAL_MS, discountedUnitCents, effectivePosPriceCents, formatMoney, hasActiveProductDiscount } from "@market/shared";
 import {
@@ -28,12 +29,13 @@ import {
   type CompletedSale,
   type StaffSession,
 } from "@/lib/pos-db";
-import { isOnline, pullCatalog, pushPendingSales, runSyncCycle, voidLastSale, receiveStock } from "@/lib/pos-sync";
+import { isOnline, pullCatalog, pushPendingSales, runSyncCycle, receiveStock } from "@/lib/pos-sync";
 import { DEFAULT_POS_PERMISSIONS, hasPosPermission, type PosPermission } from "@/lib/permissions";
 import { PosSetup } from "./PosSetup";
 import { PosStaffLogin } from "./PosStaffLogin";
 import { PosReceipt } from "./PosReceipt";
 import { PosSyncPanel } from "./PosSyncPanel";
+import { PosHistoryPanel } from "./PosHistoryPanel";
 import { PosReceiveStock } from "./PosReceiveStock";
 import { PosSupplierReturn } from "./PosSupplierReturn";
 import { PosCashPanel } from "./PosCashPanel";
@@ -54,6 +56,7 @@ export function PosApp() {
   const [error, setError] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [showSync, setShowSync] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [showReceive, setShowReceive] = useState(false);
   const [showSupplierReturn, setShowSupplierReturn] = useState(false);
   const [showCash, setShowCash] = useState(false);
@@ -68,6 +71,7 @@ export function PosApp() {
   const [suppliers, setSuppliers] = useState<Array<{ id: string; name: string }>>([]);
   const [search, setSearch] = useState("");
   const [receipt, setReceipt] = useState<CompletedSale | null>(null);
+  const [receiptIsReprint, setReceiptIsReprint] = useState(false);
   const [storeSettings, setStoreSettings] = useState<StoreSettingsDto | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -319,16 +323,17 @@ export function PosApp() {
   async function completeCheckout(method: PaymentMethodCode) {
     if (!staff || checkoutBusy || !checkoutIsValid()) return;
     setCheckoutBusy(true);
-    const appliedDiscount = posMode === "sale" ? discountPercent : 0;
+    const completedMode = posMode;
+    const appliedDiscount = completedMode === "sale" ? discountPercent : 0;
     const cartSnapshot = await getCart();
     try {
       const sale =
-        posMode === "return"
+        completedMode === "return"
           ? await completeReturn(uuid(), staff, method)
           : await completeSale(
               uuid(),
               staff,
-              posMode === "owner" ? "OWNER" : "SALE",
+              completedMode === "owner" ? "OWNER" : "SALE",
               appliedDiscount,
               method,
             );
@@ -341,20 +346,26 @@ export function PosApp() {
       }
       setReceipt({
         ...sale,
-        kind: posMode === "return" ? "RETURN" : posMode === "owner" ? "OWNER" : "SALE",
+        kind:
+          completedMode === "return"
+            ? "RETURN"
+            : completedMode === "owner"
+              ? "OWNER"
+              : "SALE",
         receiptNumber,
         lines: sale.lines.map((line) => ({
           ...line,
           productName: cartSnapshot.find((c) => c.productId === line.productId)?.name ?? "Item",
         })),
       });
+      setReceiptIsReprint(false);
       setShowPaymentChoice(false);
       setDiscountPercent(0);
       setDiscountInput("");
       setMessage(
-        posMode === "return"
+        completedMode === "return"
           ? "Customer return recorded."
-          : posMode === "owner"
+          : completedMode === "owner"
             ? "Owner / family sale recorded at cost."
             : appliedDiscount > 0
               ? `Sale recorded with ${appliedDiscount}% discount.`
@@ -366,26 +377,16 @@ export function PosApp() {
         await pullCatalog();
         await refresh();
       }
+      // Always return to Sale mode after a completed checkout.
+      if (can("pos:sell") && completedMode !== "sale") {
+        await switchMode("sale");
+      } else if (can("pos:sell")) {
+        setPosMode("sale");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not complete checkout.");
     } finally {
       setCheckoutBusy(false);
-    }
-  }
-
-  async function handleVoid() {
-    if (!staff || !can("pos:void")) {
-      setError("You do not have permission to void sales.");
-      return;
-    }
-    setError("");
-    try {
-      await voidLastSale(staff.staffId);
-      setMessage("Last sale voided.");
-      await refresh();
-      if (isOnline()) await pullCatalog();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not void sale.");
     }
   }
 
@@ -485,6 +486,9 @@ export function PosApp() {
               Sync
             </button>
           )}
+          <button className="btn btn-secondary" type="button" onClick={() => setShowHistory(true)}>
+            History
+          </button>
           <button className="btn btn-secondary" type="button" onClick={handleStaffLogout}>
             Log out
           </button>
@@ -620,14 +624,24 @@ export function PosApp() {
                           await incrementCartLine(line.productId);
                           setCart(await getCart());
                         }}>+</button>
-                        <button type="button" className="remove-btn" onClick={async () => {
+                      </div>
+                    </div>
+                    <div className="pos-cart-line-total">
+                      <strong>{formatMoney(line.lineCents)}</strong>
+                      <button
+                        type="button"
+                        className="remove-btn"
+                        aria-label={`Remove ${line.name} from cart`}
+                        title="Remove from cart"
+                        onClick={async () => {
                           setShowPaymentChoice(false);
                           await removeFromCart(line.productId);
                           setCart(await getCart());
-                        }}>Remove</button>
-                      </div>
+                        }}
+                      >
+                        <Trash2 size={17} aria-hidden />
+                      </button>
                     </div>
-                    <strong>{formatMoney(line.lineCents)}</strong>
                   </div>
                 ))}
               </div>
@@ -670,7 +684,11 @@ export function PosApp() {
                       onClick={() => void beginCheckout()}
                       disabled={discountUpdating || checkoutBusy}
                     >
-                      {checkoutBusy ? "Processing…" : "Checkout"}
+                      {checkoutBusy
+                        ? "Processing…"
+                        : posMode === "return"
+                          ? "RETURN"
+                          : "Checkout"}
                     </button>
                   )}
                   <button className="btn pos-clear-cart-btn" type="button" disabled={discountUpdating || checkoutBusy} onClick={async () => {
@@ -686,17 +704,9 @@ export function PosApp() {
                   }}>
                     Clear cart
                   </button>
-                  {can("pos:void") && (
-                    <button className="btn btn-secondary" type="button" onClick={handleVoid}>
-                      Void last sale
-                    </button>
-                  )}
                 </div>
                 {showPaymentChoice && posMode !== "owner" && (
                   <div className="pos-checkout-payment" role="group" aria-label="Select payment method">
-                    <strong>
-                      Select payment method to complete and preview receipt
-                    </strong>
                     <div className="pos-checkout-payment-buttons">
                       {PAYMENT_METHODS.map((method) => (
                         <button
@@ -731,9 +741,23 @@ export function PosApp() {
           sale={receipt}
           terminalName={terminalName}
           store={storeSettings}
-          onClose={() => setReceipt(null)}
+          reprint={receiptIsReprint}
+          onClose={() => {
+            setReceipt(null);
+            setReceiptIsReprint(false);
+          }}
         />
       )}
+      <PosHistoryPanel
+        open={showHistory}
+        timezone={storeSettings?.timezone}
+        onClose={() => setShowHistory(false)}
+        onReprint={(sale) => {
+          setShowHistory(false);
+          setReceiptIsReprint(true);
+          setReceipt(sale);
+        }}
+      />
       {showReceive && staff && can("pos:receive_stock") && (
         <PosReceiveStock
           staff={staff}
