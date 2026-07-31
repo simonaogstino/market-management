@@ -24,6 +24,9 @@ export async function authenticateTerminal(request: Request) {
   const apiKey = request.headers.get("x-terminal-key");
   if (!apiKey) return null;
 
+  const { ensureDatabase } = await import("@/ensure-database");
+  await ensureDatabase();
+
   return prisma.terminal.findFirst({
     where: { apiKey, isActive: true },
     include: { store: true },

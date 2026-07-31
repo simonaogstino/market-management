@@ -10,6 +10,13 @@ export async function register() {
     `[INFO] App started nodeEnv=${process.env.NODE_ENV ?? "unknown"}`,
   );
 
+  try {
+    const { ensureDatabase } = await import("./ensure-database");
+    await ensureDatabase();
+  } catch (err) {
+    console.error("[ERROR] Database ensure failed", err);
+  }
+
   process.on("uncaughtException", (err) => {
     console.error("[ERROR] uncaughtException", err);
   });
