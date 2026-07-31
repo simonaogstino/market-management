@@ -11,6 +11,7 @@ logs/*
 target
 apps/desktop/src-tauri/target
 *.db
+!packages/database/prisma/airo-template.db
 *.db-journal
 .DS_Store
 Thumbs.db

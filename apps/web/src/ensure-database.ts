@@ -1,5 +1,5 @@
-import { execSync } from "node:child_process";
-import { join } from "node:path";
+import { copyFileSync, existsSync, mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 const globalEnsure = globalThis as unknown as {
   __marketDbEnsured?: boolean;
@@ -9,6 +9,19 @@ const globalEnsure = globalThis as unknown as {
 function schemaMissing(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
   return msg.includes("P2021") || msg.includes("does not exist");
+}
+
+function sqlitePathFromUrl(url: string): string | null {
+  if (!url.startsWith("file:")) return null;
+  let filePath = url.slice("file:".length);
+  if (
+    (filePath.startsWith('"') && filePath.endsWith('"')) ||
+    (filePath.startsWith("'") && filePath.endsWith("'"))
+  ) {
+    filePath = filePath.slice(1, -1);
+  }
+  if (filePath.startsWith("///")) filePath = filePath.slice(2);
+  return filePath;
 }
 
 async function tablesReady(): Promise<boolean> {
@@ -22,32 +35,33 @@ async function tablesReady(): Promise<boolean> {
   }
 }
 
-async function applySchemaAndSeed(root: string) {
-  const schema = join(root, "packages", "database", "prisma", "schema.prisma");
-  const dbPkg = join(root, "packages", "database");
+function installTemplateDb(root: string, targetUrl: string) {
+  const template = join(root, "packages", "database", "prisma", "airo-template.db");
+  if (!existsSync(template)) {
+    throw new Error(`Missing seeded template DB at ${template}`);
+  }
 
-  console.info("[INFO] Database schema missing — running prisma db push + seed");
-  console.info(`[INFO] schema=${schema}`);
-  console.info(`[INFO] DATABASE_URL=${process.env.DATABASE_URL}`);
+  const targetPath = sqlitePathFromUrl(targetUrl);
+  if (!targetPath) {
+    throw new Error(`DATABASE_URL must be a file: SQLite URL, got: ${targetUrl}`);
+  }
 
-  execSync(`npx prisma db push --schema "${schema}" --skip-generate --accept-data-loss`, {
-    cwd: dbPkg,
-    stdio: "inherit",
-    env: process.env,
-    shell: true,
-  });
-
-  execSync("npx tsx prisma/seed.ts", {
-    cwd: dbPkg,
-    stdio: "inherit",
-    env: process.env,
-    shell: true,
-  });
+  mkdirSync(dirname(targetPath), { recursive: true });
+  copyFileSync(template, targetPath);
+  console.info(`[INFO] Installed seeded SQLite template -> ${targetPath}`);
 }
 
-/** Creates SQLite tables + seed data if the DB file is empty (common on Airo/GoDaddy). */
+/**
+ * Ensures SQLite has tables + seed data.
+ * Uses a committed template DB copy (no prisma CLI needed at runtime) — required for Airo.
+ */
 export async function ensureDatabase() {
-  if (globalEnsure.__marketDbEnsured) return;
+  console.info("[INFO] ensureDatabase: start");
+
+  if (globalEnsure.__marketDbEnsured) {
+    console.info("[INFO] ensureDatabase: already ready");
+    return;
+  }
   if (globalEnsure.__marketDbEnsurePromise) {
     await globalEnsure.__marketDbEnsurePromise;
     return;
@@ -66,26 +80,27 @@ export async function ensureDatabase() {
     } = await import("@market/database");
 
     const root = findMonorepoRootFromCwd();
-    normalizeSqliteDatabaseUrl(root);
+    const url = normalizeSqliteDatabaseUrl(root) ?? process.env.DATABASE_URL;
     await resetPrismaClient();
 
     if (await tablesReady()) {
       globalEnsure.__marketDbEnsured = true;
-      console.info("[INFO] Database schema already present");
+      console.info("[INFO] ensureDatabase: schema already present");
       return;
     }
 
-    await applySchemaAndSeed(root);
+    console.info("[INFO] ensureDatabase: tables missing — installing template DB");
+    installTemplateDb(root, url);
     await resetPrismaClient();
 
     if (!(await tablesReady())) {
       throw new Error(
-        `Database schema still missing after db:push (DATABASE_URL=${process.env.DATABASE_URL})`,
+        `Database schema still missing after template install (DATABASE_URL=${process.env.DATABASE_URL})`,
       );
     }
 
     globalEnsure.__marketDbEnsured = true;
-    console.info("[INFO] Database ready");
+    console.info("[INFO] ensureDatabase: ready");
   })();
 
   try {

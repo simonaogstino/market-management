@@ -32,6 +32,7 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
+        console.info("[INFO] authorize: calling ensureDatabase");
         const { ensureDatabase } = await import("@/ensure-database");
         await ensureDatabase();
 
