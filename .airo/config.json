@@ -1,4 +1,4 @@
 {
-  "buildCommand": "NODE_ENV=production npm ci && npm run db:generate && npm run db:push && npm run db:seed && npm run build",
-  "serveCommand": "NODE_ENV=production npm start"
+  "buildCommand": "NODE_ENV=production npm ci && npm run db:generate && cp -f packages/database/prisma/airo-template.db packages/database/prisma/prod.db && npm run build",
+  "serveCommand": "NODE_ENV=production DATABASE_URL=${DATABASE_URL:-file:/app/packages/database/prisma/airo-template.db} npm start"
 }

@@ -68,13 +68,13 @@ The app is running, but you must set **Secrets** in Airo → **Settings → Secr
 
 | Secret | Example |
 |--------|---------|
-| `DATABASE_URL` | `file:/app/packages/database/prisma/prod.db` |
+| `DATABASE_URL` | `file:/app/packages/database/prisma/airo-template.db` |
 | `NEXTAUTH_SECRET` | long random string (32+ characters) |
 | `NEXTAUTH_URL` | `https://your-domain.com` |
 
 GoDaddy's built-in database credentials use different variable names — Prisma needs **`DATABASE_URL`** specifically. Either:
 
-- **SQLite (simplest):** use `file:/app/packages/database/prisma/prod.db` as above, or
+- **SQLite (simplest):** use `file:/app/packages/database/prisma/airo-template.db` (seeded file in the repo), or
 - **MySQL/Postgres:** build a connection string, e.g. `mysql://user:pass@host:3306/dbname`
 
 On each deploy, `npm start` runs `db:push` and `db:seed` automatically so tables and the admin user are created.

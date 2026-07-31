@@ -1,5 +1,5 @@
 const required = [
-  { key: "DATABASE_URL", hint: 'e.g. file:/app/packages/database/prisma/prod.db' },
+  { key: "DATABASE_URL", hint: 'e.g. file:/app/packages/database/prisma/airo-template.db' },
   { key: "NEXTAUTH_SECRET", hint: "long random string (32+ chars)" },
   { key: "NEXTAUTH_URL", hint: "https://your-domain.com" },
 ];
