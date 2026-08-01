@@ -56,6 +56,8 @@ export const PERMISSION_GROUPS = [
     items: [
       { key: "cash:view", label: "View cash sessions" },
       { key: "cash:manage", label: "Open, close & adjust cash drawers" },
+      { key: "safe:view", label: "View safe / vault" },
+      { key: "safe:manage", label: "Transfer to safe & bank deposits" },
     ],
   },
   {
@@ -171,6 +173,7 @@ export const NAV_ITEMS: Array<{
   { href: "/admin/suppliers", label: "Suppliers", icon: "suppliers", permission: "suppliers:view" },
   { href: "/admin/expenses", label: "Expenses", icon: "expenses", permission: "expenses:view" },
   { href: "/admin/cash", label: "Cash", icon: "cash", permission: "cash:view" },
+  { href: "/admin/safe", label: "Safe", icon: "safe", permission: "safe:view" },
   { href: "/admin/staff", label: "POS Staff", icon: "staff", permission: "staff:view" },
   { href: "/admin/users", label: "Office Users", icon: "users", permission: "users:view" },
   { href: "/admin/terminals", label: "POS Terminals", icon: "terminals", permission: "terminals:view" },

@@ -18,6 +18,7 @@ import {
   Warehouse,
   Wallet,
   Banknote,
+  Landmark,
   type LucideIcon,
 } from "lucide-react";
 
@@ -30,6 +31,7 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   suppliers: Truck,
   expenses: Wallet,
   cash: Banknote,
+  safe: Landmark,
   staff: Users,
   users: UserCog,
   terminals: Monitor,

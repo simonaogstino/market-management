@@ -757,7 +757,13 @@ async function seedOfficeUsers(storeId: string) {
   await prisma.user.upsert({
     where: { email: "accountant@store.local" },
     update: {
-      permissions: JSON.stringify(["sales:view", "reports:view"]),
+      permissions: JSON.stringify([
+        "sales:view",
+        "reports:view",
+        "cash:view",
+        "safe:view",
+        "safe:manage",
+      ]),
       isActive: true,
     },
     create: {
@@ -765,7 +771,13 @@ async function seedOfficeUsers(storeId: string) {
       name: "Jane Doe (Accountant)",
       passwordHash,
       role: Role.OFFICE,
-      permissions: JSON.stringify(["sales:view", "reports:view"]),
+      permissions: JSON.stringify([
+        "sales:view",
+        "reports:view",
+        "cash:view",
+        "safe:view",
+        "safe:manage",
+      ]),
       isActive: true,
       storeId,
     },

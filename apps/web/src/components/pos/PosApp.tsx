@@ -81,7 +81,6 @@ export function PosApp() {
   const [tenderInput, setTenderInput] = useState("");
   const [tenderError, setTenderError] = useState("");
   const tenderInputRef = useRef<HTMLInputElement>(null);
-  const [pendingQty, setPendingQty] = useState(1);
   const [editingQtyId, setEditingQtyId] = useState<string | null>(null);
   const [editingQtyValue, setEditingQtyValue] = useState("");
   const [posMode, setPosMode] = useState<"sale" | "return" | "owner">("sale");
@@ -199,7 +198,7 @@ export function PosApp() {
 
     const product = findProductByCode(code);
     if (product) {
-      const qty = parsedQty > 1 ? parsedQty : pendingQty;
+      const qty = parsedQty > 1 ? parsedQty : 1;
       await handleAdd(product, qty);
       setMessage(qty > 1 ? `Added ${qty}× ${product.name}` : `Added: ${product.name}`);
       setError("");
@@ -231,7 +230,7 @@ export function PosApp() {
     void submitBarcode(e.currentTarget.value);
   }
 
-  async function handleAdd(product: ProductDto, qty = pendingQty) {
+  async function handleAdd(product: ProductDto, qty = 1) {
     const listOrCost =
       posMode === "owner" ? product.costCents : effectivePosPriceCents(product);
     const unitCents =
@@ -241,7 +240,6 @@ export function PosApp() {
     await addToCart(product, unitCents, qty);
     setCart(await getCart());
     setSearch("");
-    setPendingQty(1);
     setEditingQtyId(null);
     if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
     searchRef.current?.focus();
@@ -457,19 +455,7 @@ export function PosApp() {
         return;
       }
 
-      // Quantity chips for next item (skip while cash tender is open).
-      if (showCashTender) return;
-      if (e.key === "1" || e.key === "2" || e.key === "3" || e.key === "5") {
-        const n = Number(e.key);
-        e.preventDefault();
-        setPendingQty(n);
-        return;
-      }
-      if (e.key === "0") {
-        e.preventDefault();
-        setPendingQty(10);
-        return;
-      }
+      // Quantity chips for next item removed — use barcode SKU*N or cart line qty.
     }
 
     window.addEventListener("keydown", onKeyDown);
@@ -830,19 +816,6 @@ export function PosApp() {
             }}
           >
             <h2>Products</h2>
-            <div className="pos-qty-bar" role="group" aria-label="Quantity for next item">
-              <span className="pos-qty-bar-label">Qty</span>
-              {[1, 2, 3, 5, 10].map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  className={`btn btn-secondary pos-qty-chip${pendingQty === n ? " is-active" : ""}`}
-                  onClick={() => setPendingQty(n)}
-                >
-                  ×{n}
-                </button>
-              ))}
-            </div>
             <input
               ref={searchRef}
               className="pos-search"
@@ -899,7 +872,7 @@ export function PosApp() {
         <section className="pos-panel pos-cart-panel">
           <h2>Cart</h2>
           <p className="pos-shortcuts-hint">
-            F2 Cash · F3 Card · F4 Transfer · F5 Search · F8 Clear · Esc Cancel · 1/2/3/5/0 Qty
+            F2 Cash · F3 Card · F4 Transfer · F5 Search · F8 Clear · Esc Cancel
           </p>
           {canDiscount && (
             <div className={`pos-discount-row${discountPercent > 0 ? " is-active" : ""}`}>
@@ -997,21 +970,6 @@ export function PosApp() {
                         >
                           +
                         </button>
-                        <div className="pos-line-qty-quick">
-                          {[2, 5, 10].map((n) => (
-                            <button
-                              key={n}
-                              type="button"
-                              className="btn btn-secondary pos-line-qty-chip"
-                              onClick={async () => {
-                                await setCartLineQuantity(line.productId, n);
-                                setCart(await getCart());
-                              }}
-                            >
-                              ×{n}
-                            </button>
-                          ))}
-                        </div>
                       </div>
                     </div>
                     <div className="pos-cart-line-total">

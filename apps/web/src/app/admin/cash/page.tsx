@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { requirePageAccess } from "@/lib/admin-session";
 import { formatMoney } from "@/lib/cash";
@@ -43,6 +44,8 @@ export default async function CashPage() {
           <h1 style={{ margin: 0 }}>Cash box</h1>
           <p style={{ color: "var(--muted)", margin: "0.25rem 0 0" }}>
             Cash in each POS terminal. Paying suppliers or expenses from cash reduces that box.
+            Collect cash into the{" "}
+            <Link href="/admin/safe">store safe</Link> when the accountant picks it up.
           </p>
         </div>
       </div>

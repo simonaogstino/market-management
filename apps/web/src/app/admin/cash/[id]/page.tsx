@@ -7,6 +7,7 @@ import { computeExpectedCashCents } from "@/lib/cash-server";
 import { hasPermission } from "@/lib/permissions";
 import { getStoreSettings } from "@/lib/store-settings";
 import { CashSessionActions } from "@/components/admin/CashSessionActions";
+import { TransferToSafeFromSessionForm } from "@/components/admin/SafeForms";
 
 export default async function CashSessionDetailPage({
   params,
@@ -15,6 +16,7 @@ export default async function CashSessionDetailPage({
 }) {
   const session = await requirePageAccess("cash:view");
   const canManage = hasPermission(session.user.role, session.user.permissions, "cash:manage");
+  const canSafe = hasPermission(session.user.role, session.user.permissions, "safe:manage");
   const { id } = await params;
   const settings = await getStoreSettings(session.user.storeId);
 
@@ -136,6 +138,15 @@ export default async function CashSessionDetailPage({
           </div>
         )}
       </div>
+
+      {canSafe && cashSession.status === "OPEN" && (
+        <div style={{ marginBottom: "1.5rem" }}>
+          <TransferToSafeFromSessionForm
+            sessionId={cashSession.id}
+            maxCents={live.expectedCents}
+          />
+        </div>
+      )}
 
       {canManage && cashSession.status === "OPEN" && (
         <div style={{ marginBottom: "1.5rem" }}>

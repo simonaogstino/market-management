@@ -742,49 +742,6 @@ input, select {
   text-align: center;
 }
 
-.pos-line-qty-quick {
-  display: flex;
-  gap: 0.25rem;
-  margin-left: 0.25rem;
-}
-
-.pos-line-qty-chip {
-  min-height: 32px;
-  padding: 0.2rem 0.45rem;
-  font-size: 0.75rem;
-  font-weight: 700;
-}
-
-.pos-qty-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.35rem;
-  margin: 0.35rem 0 0.5rem;
-}
-
-.pos-qty-bar-label {
-  color: #94a3b8;
-  font-size: 0.8rem;
-  font-weight: 700;
-  margin-right: 0.15rem;
-}
-
-.pos-qty-chip {
-  min-height: 36px;
-  min-width: 44px;
-  padding: 0.25rem 0.55rem;
-  font-size: 0.85rem;
-  font-weight: 800;
-  touch-action: manipulation;
-}
-
-.pos-qty-chip.is-active {
-  background: #166534;
-  border-color: #22c55e;
-  color: #fff;
-}
-
 .pos-shortcuts-hint {
   margin: -0.35rem 0 0.75rem;
   color: #64748b;

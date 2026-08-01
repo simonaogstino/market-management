@@ -19,9 +19,15 @@ function ensureSqlite() {
     process.exit(1);
   }
 
+  const preferredDev = join(root, "packages", "database", "prisma", "dev.db");
+
   let targetUrl = process.env.DATABASE_URL?.trim();
   if (!targetUrl) {
-    targetUrl = `file:${join(root, "packages", "database", "prisma", "airo-template.db")}`;
+    // Prefer local dev.db when it already has data; otherwise use the template.
+    targetUrl =
+      existsSync(preferredDev) && statSync(preferredDev).size >= 10_000
+        ? `file:${preferredDev}`
+        : `file:${template}`;
   }
 
   let targetPath = sqlitePathFromUrl(targetUrl);
