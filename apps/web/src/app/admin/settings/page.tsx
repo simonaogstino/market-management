@@ -1,12 +1,16 @@
+import { DatabaseBackupCard } from "@/components/admin/DatabaseBackupCard";
 import { StoreSettingsForm } from "@/components/admin/StoreSettingsForm";
-import { getAdminSession, requirePageAccess } from "@/lib/admin-session";
+import { requirePageAccess } from "@/lib/admin-session";
 import { hasPermission } from "@/lib/permissions";
 import { formatStoreMoney, getStoreSettings } from "@/lib/store-settings";
+import { normalizeSqliteDatabaseUrl } from "@market/database";
 
 export default async function SettingsPage() {
   const session = await requirePageAccess("settings:view");
   const settings = await getStoreSettings(session.user.storeId);
   const canEdit = hasPermission(session.user.role, session.user.permissions, "settings:manage");
+  const sqliteUrl = normalizeSqliteDatabaseUrl() ?? process.env.DATABASE_URL?.trim() ?? "";
+  const backupAvailable = sqliteUrl.startsWith("file:");
 
   return (
     <div>
@@ -18,6 +22,8 @@ export default async function SettingsPage() {
       <div className="card" style={{ maxWidth: 560, marginBottom: "1.5rem" }}>
         <StoreSettingsForm settings={settings} canEdit={canEdit} />
       </div>
+
+      {canEdit && <DatabaseBackupCard available={backupAvailable} />}
 
       <div className="card" style={{ maxWidth: 560 }}>
         <h2 style={{ marginTop: 0, fontSize: "1rem" }}>Preview</h2>
