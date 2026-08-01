@@ -82,7 +82,8 @@ function tryPrismaDbPush(root: string): boolean {
       cwd: dbPkg,
       stdio: "inherit",
       env: process.env,
-      shell: true,
+      // @types/node types `shell` as string (path), not boolean
+      shell: process.platform === "win32" ? process.env.ComSpec || "cmd.exe" : "/bin/sh",
     });
     return true;
   } catch (err) {
