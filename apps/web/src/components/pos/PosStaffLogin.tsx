@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { LogIn } from "lucide-react";
 import { saveStaffSession } from "@/lib/pos-db";
 import { loginStaff } from "@/lib/pos-sync";
 
@@ -86,6 +87,7 @@ export function PosStaffLogin({ onLoggedIn }: { onLoggedIn: () => void }) {
           </div>
           {error && <p className="pos-error">{error}</p>}
           <button className="btn" type="submit" disabled={loading || pin.length !== 6}>
+            <LogIn className="pos-ico" aria-hidden />
             {loading ? "Signing in…" : "Sign in"}
           </button>
         </form>

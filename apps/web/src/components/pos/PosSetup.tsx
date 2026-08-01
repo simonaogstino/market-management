@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { Play } from "lucide-react";
 
 export function PosSetup({ onSaved }: { onSaved: () => void }) {
   const [apiKey, setApiKey] = useState("pos-terminal-1-key");
@@ -45,6 +46,7 @@ export function PosSetup({ onSaved }: { onSaved: () => void }) {
           </label>
           {error && <p className="pos-error">{error}</p>}
           <button className="btn" type="submit" disabled={loading}>
+            <Play className="pos-ico" aria-hidden />
             {loading ? "Connecting…" : "Start POS"}
           </button>
         </form>

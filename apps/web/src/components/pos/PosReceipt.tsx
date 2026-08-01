@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { ArrowRight, Printer, X } from "lucide-react";
 import type { StoreSettingsDto } from "@market/shared";
 import { formatMoney } from "@market/shared";
 import type { CompletedSale } from "@/lib/pos-db";
@@ -199,9 +200,11 @@ export function PosReceipt({
           <ReceiptBody sale={sale} terminalName={terminalName} store={s} />
           <div className="pos-modal-actions">
             <button className="btn" type="button" onClick={handlePrint}>
+              <Printer className="pos-ico" aria-hidden />
               Print receipt
             </button>
             <button className="btn btn-secondary" type="button" onClick={onClose}>
+              <X className="pos-ico" aria-hidden />
               Close
             </button>
           </div>
@@ -245,9 +248,11 @@ export function PosReceipt({
         </div>
         <div className="pos-receipt-toast-actions">
           <button className="btn btn-secondary" type="button" onClick={handlePrint}>
+            <Printer className="pos-ico" aria-hidden />
             Print
           </button>
-          <button className="btn" type="button" onClick={onClose}>
+          <button className="btn" type="button" onClick={onClose} title="Enter">
+            <ArrowRight className="pos-ico" aria-hidden />
             Next
           </button>
         </div>

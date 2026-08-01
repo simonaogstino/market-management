@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { RefreshCw } from "lucide-react";
 import { formatMoney } from "@market/shared";
 import { fetchServerSyncStatus, getLocalSyncSummary, runSyncCycle } from "@/lib/pos-sync";
 
@@ -102,6 +103,7 @@ export function PosSyncPanel({ open, onClose, onChanged }: { open: boolean; onCl
         )}
         {message && <p className="pos-success-text">{message}</p>}
         <button className="btn" type="button" onClick={syncNow} disabled={loading}>
+          <RefreshCw className={`pos-ico${loading ? " pos-ico-spin" : ""}`} aria-hidden />
           {loading ? "Syncing…" : "Sync now"}
         </button>
       </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PackageMinus, Plus, X } from "lucide-react";
 import type { ProductDto } from "@market/shared";
 import { supplierReturnStock } from "@/lib/pos-sync";
 import { formatMoney } from "@/lib/suppliers";
@@ -153,6 +154,7 @@ export function PosSupplierReturn({
             />
           </label>
           <button type="button" className="btn btn-secondary" onClick={addLine}>
+            <Plus className="pos-ico" aria-hidden />
             Add
           </button>
         </div>
@@ -185,9 +187,17 @@ export function PosSupplierReturn({
 
         <div className="pos-modal-actions">
           <button type="button" className="btn" disabled={loading} onClick={handleSubmit}>
-            {loading ? "Saving…" : "Confirm return"}
+            {loading ? (
+              "Saving…"
+            ) : (
+              <>
+                <PackageMinus className="pos-ico" aria-hidden />
+                Confirm return
+              </>
+            )}
           </button>
           <button type="button" className="btn btn-secondary" onClick={onClose}>
+            <X className="pos-ico" aria-hidden />
             Cancel
           </button>
         </div>

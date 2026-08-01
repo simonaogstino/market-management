@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { PackagePlus, Plus } from "lucide-react";
 import type { ProductDto } from "@market/shared";
 import type { StaffSession } from "@/lib/pos-db";
 import { createPosProduct, receiveStock } from "@/lib/pos-sync";
@@ -307,6 +308,7 @@ export function PosReceiveStock({
               className="btn btn-secondary"
               onClick={() => applySku(sku)}
             >
+              <Plus className="pos-ico" aria-hidden />
               Add as new product
             </button>
           )}
@@ -340,6 +342,7 @@ export function PosReceiveStock({
               (creatingNew && suppliers.length === 0)
             }
           >
+            <PackagePlus className="pos-ico" aria-hidden />
             {loading
               ? "Saving…"
               : creatingNew

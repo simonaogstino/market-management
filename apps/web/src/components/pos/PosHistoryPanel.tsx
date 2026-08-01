@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Printer } from "lucide-react";
 import { formatMoney } from "@market/shared";
 import { paymentMethodLabel } from "@/lib/cash";
 import {
@@ -96,6 +97,7 @@ export function PosHistoryPanel({
                     onReprint(await toCompletedSale(sale));
                   }}
                 >
+                  <Printer className="pos-ico" aria-hidden />
                   Print receipt
                 </button>
               </div>

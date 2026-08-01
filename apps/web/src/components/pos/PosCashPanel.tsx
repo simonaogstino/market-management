@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Lock, Unlock, Wallet, X } from "lucide-react";
 import { formatMoney } from "@market/shared";
 import { getTerminalConfig, type StaffSession } from "@/lib/pos-db";
 
@@ -184,6 +185,7 @@ export function PosCashPanel({
               />
             </label>
             <button className="btn" type="button" onClick={() => void openDrawer()}>
+              <Unlock className="pos-ico" aria-hidden />
               Open drawer
             </button>
           </div>
@@ -249,6 +251,7 @@ export function PosCashPanel({
                 />
               </label>
               <button className="btn btn-secondary" type="button" onClick={() => void addMovement()}>
+                <Wallet className="pos-ico" aria-hidden />
                 Record movement
               </button>
             </fieldset>
@@ -266,6 +269,7 @@ export function PosCashPanel({
                 />
               </label>
               <button className="btn" type="button" onClick={() => void closeDrawer()}>
+                <Lock className="pos-ico" aria-hidden />
                 Close &amp; reconcile
               </button>
             </fieldset>
@@ -274,6 +278,7 @@ export function PosCashPanel({
 
         <div className="pos-modal-actions">
           <button className="btn btn-secondary" type="button" onClick={onClose}>
+            <X className="pos-ico" aria-hidden />
             Close
           </button>
         </div>

@@ -594,6 +594,36 @@ input, select {
   background: #334155;
 }
 
+/* Compact icons — keep existing button height/padding */
+.pos-ico {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  stroke-width: 2.25;
+}
+
+.pos-ico-lg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.pos-shell .btn,
+.pos-modal .btn,
+.pos-receipt-toast .btn,
+.pos-setup .btn {
+  gap: 0.35rem;
+}
+
+@keyframes pos-ico-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.pos-ico-spin {
+  animation: pos-ico-spin 0.8s linear infinite;
+}
+
 .pin-display {
   display: flex;
   justify-content: center;

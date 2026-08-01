@@ -2,7 +2,21 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuid } from "uuid";
-import { Trash2 } from "lucide-react";
+import {
+  ArrowLeftRight,
+  Banknote,
+  Check,
+  CreditCard,
+  History,
+  LogOut,
+  PackageMinus,
+  PackagePlus,
+  RefreshCw,
+  Settings,
+  Trash2,
+  Wallet,
+  X,
+} from "lucide-react";
 import type { ProductDto, StoreSettingsDto } from "@market/shared";
 import { SYNC_INTERVAL_MS, discountedUnitCents, effectivePosPriceCents, formatMoney, hasActiveProductDiscount } from "@market/shared";
 import {
@@ -354,6 +368,21 @@ export function PosApp() {
           searchRef.current?.focus();
           return;
         }
+        searchRef.current?.focus();
+        return;
+      }
+
+      // Enter = Next on the post-sale toast (same as the Next button).
+      if (e.key === "Enter" && receipt && !receiptIsReprint) {
+        const searchHasCode =
+          e.target === searchRef.current && (searchRef.current?.value.trim() ?? "") !== "";
+        setReceipt(null);
+        setReceiptIsReprint(false);
+        if (searchHasCode) {
+          // Let the search/barcode handler submit the next item.
+          return;
+        }
+        e.preventDefault();
         searchRef.current?.focus();
         return;
       }
@@ -739,11 +768,13 @@ export function PosApp() {
               type="button"
               onClick={() => setShowCash(true)}
             >
+              <Wallet className="pos-ico" aria-hidden />
               Cash drawer {cashOpen ? "(open)" : "(closed)"}
             </button>
           )}
           {can("pos:receive_stock") && (
             <button className="btn btn-secondary" type="button" onClick={() => setShowReceive(true)}>
+              <PackagePlus className="pos-ico" aria-hidden />
               Receive stock
             </button>
           )}
@@ -754,21 +785,26 @@ export function PosApp() {
               onClick={() => setShowSupplierReturn(true)}
               disabled={suppliers.length === 0}
             >
+              <PackageMinus className="pos-ico" aria-hidden />
               Return to supplier
             </button>
           )}
           {can("pos:view_sync") && (
             <button className="btn btn-secondary" type="button" onClick={() => setShowSync(true)}>
+              <RefreshCw className="pos-ico" aria-hidden />
               Sync
             </button>
           )}
           <button className="btn btn-secondary" type="button" onClick={() => setShowHistory(true)}>
+            <History className="pos-ico" aria-hidden />
             History
           </button>
           <button className="btn btn-secondary" type="button" onClick={handleStaffLogout}>
+            <LogOut className="pos-ico" aria-hidden />
             Log out
           </button>
           <button className="btn btn-secondary" type="button" onClick={() => setShowSettings(true)}>
+            <Settings className="pos-ico" aria-hidden />
             Settings
           </button>
         </div>
@@ -990,7 +1026,7 @@ export function PosApp() {
                           setCart(await getCart());
                         }}
                       >
-                        <Trash2 size={17} aria-hidden />
+                        <Trash2 className="pos-ico" aria-hidden />
                       </button>
                     </div>
                   </div>
@@ -1038,6 +1074,7 @@ export function PosApp() {
                             onClick={() => void beginCheckout()}
                             disabled={discountUpdating || checkoutBusy}
                           >
+                            <Banknote className="pos-ico pos-ico-lg" aria-hidden />
                             {checkoutBusy
                               ? "Processing…"
                               : posMode === "return"
@@ -1056,6 +1093,11 @@ export function PosApp() {
                                   disabled={discountUpdating || checkoutBusy}
                                   onClick={() => void completeCheckout(method.value)}
                                 >
+                                  {method.value === "CARD" ? (
+                                    <CreditCard className="pos-ico" aria-hidden />
+                                  ) : (
+                                    <ArrowLeftRight className="pos-ico" aria-hidden />
+                                  )}
                                   {method.label}
                                 </button>
                               ))}
@@ -1134,6 +1176,7 @@ export function PosApp() {
                               disabled={checkoutBusy}
                               onClick={() => confirmCashTender()}
                             >
+                              <Check className="pos-ico pos-ico-lg" aria-hidden />
                               {checkoutBusy ? "Processing…" : "Confirm cash"}
                             </button>
                             <button
@@ -1146,6 +1189,7 @@ export function PosApp() {
                                 setTenderError("");
                               }}
                             >
+                              <X className="pos-ico" aria-hidden />
                               Cancel
                             </button>
                           </div>
@@ -1166,6 +1210,7 @@ export function PosApp() {
                     setDiscountUpdating(false);
                     setCart(await getCart());
                   }}>
+                    <Trash2 className="pos-ico" aria-hidden />
                     Clear cart
                   </button>
                 </div>
