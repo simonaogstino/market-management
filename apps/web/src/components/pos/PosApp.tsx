@@ -7,24 +7,25 @@ import type { ProductDto, StoreSettingsDto } from "@market/shared";
 import { SYNC_INTERVAL_MS, discountedUnitCents, effectivePosPriceCents, formatMoney, hasActiveProductDiscount } from "@market/shared";
 import {
   addToCart,
+  applyCartDiscount,
   clearCart,
-  completeSale,
+  clearStaffSession,
   completeReturn,
+  completeSale,
   countConflictSales,
   countPendingSales,
   decrementCartLine,
   getCart,
   getStaffSession,
+  getStoreSettings,
   getTerminalConfig,
   incrementCartLine,
-  listProducts,
   listPosCatalogProducts,
+  listProducts,
   posDb,
   removeFromCart,
-  clearStaffSession,
-  getStoreSettings,
   repriceCart,
-  applyCartDiscount,
+  setCartLineQuantity,
   type CartLine,
   type CompletedSale,
   type StaffSession,
@@ -61,8 +62,14 @@ export function PosApp() {
   const [showSupplierReturn, setShowSupplierReturn] = useState(false);
   const [showCash, setShowCash] = useState(false);
   const [cashOpen, setCashOpen] = useState(false);
-  const [showPaymentChoice, setShowPaymentChoice] = useState(false);
   const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [showCashTender, setShowCashTender] = useState(false);
+  const [tenderInput, setTenderInput] = useState("");
+  const [tenderError, setTenderError] = useState("");
+  const tenderInputRef = useRef<HTMLInputElement>(null);
+  const [pendingQty, setPendingQty] = useState(1);
+  const [editingQtyId, setEditingQtyId] = useState<string | null>(null);
+  const [editingQtyValue, setEditingQtyValue] = useState("");
   const [posMode, setPosMode] = useState<"sale" | "return" | "owner">("sale");
   const [discountPercent, setDiscountPercent] = useState(0);
   const [discountInput, setDiscountInput] = useState("");
@@ -95,7 +102,9 @@ export function PosApp() {
   async function switchMode(next: "sale" | "return" | "owner") {
     discountRequestRef.current++;
     await discountQueueRef.current.catch(() => undefined);
-    setShowPaymentChoice(false);
+    setShowCashTender(false);
+    setTenderInput("");
+    setTenderError("");
     setPosMode(next);
     setDiscountPercent(0);
     setDiscountInput("");
@@ -111,7 +120,6 @@ export function PosApp() {
 
   function updateDiscountFromInput(value: string) {
     if (!canDiscount) return;
-    setShowPaymentChoice(false);
     setDiscountInput(value);
 
     const raw = value.trim() === "" ? 0 : Number.parseFloat(value);
@@ -155,14 +163,31 @@ export function PosApp() {
     return catalogProducts.find((p) => p.sku.toLowerCase() === normalized) ?? null;
   }
 
+  /** Supports `SKU*5`, `5*SKU`, `SKU x 5`, `5×SKU`. */
+  function parseBarcodeWithQty(raw: string): { code: string; qty: number } {
+    const s = raw.trim();
+    let m = s.match(/^(\d+)\s*[x×*]\s*(.+)$/i);
+    if (m) {
+      const qty = Math.max(1, Number.parseInt(m[1], 10) || 1);
+      return { qty, code: m[2].trim() };
+    }
+    m = s.match(/^(.+?)\s*[x×*]\s*(\d+)$/i);
+    if (m) {
+      const qty = Math.max(1, Number.parseInt(m[2], 10) || 1);
+      return { qty, code: m[1].trim() };
+    }
+    return { qty: 1, code: s };
+  }
+
   async function submitBarcode(raw: string) {
-    const code = raw.trim();
+    const { code, qty: parsedQty } = parseBarcodeWithQty(raw);
     if (!code) return;
 
     const product = findProductByCode(code);
     if (product) {
-      await handleAdd(product);
-      setMessage(`Added: ${product.name}`);
+      const qty = parsedQty > 1 ? parsedQty : pendingQty;
+      await handleAdd(product, qty);
+      setMessage(qty > 1 ? `Added ${qty}× ${product.name}` : `Added: ${product.name}`);
       setError("");
       return;
     }
@@ -175,8 +200,10 @@ export function PosApp() {
     setSearch(value);
     if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
 
-    const product = findProductByCode(value);
-    if (product) {
+    const { code } = parseBarcodeWithQty(value);
+    const product = findProductByCode(code);
+    if (product && !value.includes("*") && !/[x×]/i.test(value)) {
+      // Auto-add only for plain SKU scans (not while typing qty*sku patterns).
       scanTimerRef.current = setTimeout(() => {
         void submitBarcode(value);
       }, 120);
@@ -188,6 +215,34 @@ export function PosApp() {
     e.preventDefault();
     if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
     void submitBarcode(e.currentTarget.value);
+  }
+
+  async function handleAdd(product: ProductDto, qty = pendingQty) {
+    const listOrCost =
+      posMode === "owner" ? product.costCents : effectivePosPriceCents(product);
+    const unitCents =
+      posMode === "sale" && discountPercent > 0
+        ? discountedUnitCents(effectivePosPriceCents(product), discountPercent)
+        : listOrCost;
+    await addToCart(product, unitCents, qty);
+    setCart(await getCart());
+    setSearch("");
+    setPendingQty(1);
+    setEditingQtyId(null);
+    if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
+    searchRef.current?.focus();
+  }
+
+  async function applyLineQty(productId: string, raw: string) {
+    const qty = Number.parseInt(raw, 10);
+    if (Number.isNaN(qty)) {
+      setEditingQtyId(null);
+      return;
+    }
+    await setCartLineQuantity(productId, qty);
+    setCart(await getCart());
+    setEditingQtyId(null);
+    setEditingQtyValue("");
   }
 
   async function refresh() {
@@ -245,6 +300,175 @@ export function PosApp() {
 
   useEffect(() => {
     if (!configured || !staff || showSettings) return;
+
+    function isTypingTarget(target: EventTarget | null) {
+      if (!(target instanceof HTMLElement)) return false;
+      const tag = target.tagName;
+      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
+    }
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      // Escape: cancel / close layers (works even while typing).
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (receipt) {
+          setReceipt(null);
+          setReceiptIsReprint(false);
+          return;
+        }
+        if (showCashTender) {
+          setShowCashTender(false);
+          setTenderInput("");
+          setTenderError("");
+          return;
+        }
+        if (showCash) {
+          setShowCash(false);
+          return;
+        }
+        if (showReceive) {
+          setShowReceive(false);
+          return;
+        }
+        if (showSupplierReturn) {
+          setShowSupplierReturn(false);
+          return;
+        }
+        if (showHistory) {
+          setShowHistory(false);
+          return;
+        }
+        if (showSync) {
+          setShowSync(false);
+          return;
+        }
+        if (editingQtyId) {
+          setEditingQtyId(null);
+          setEditingQtyValue("");
+          return;
+        }
+        if (search.trim()) {
+          setSearch("");
+          searchRef.current?.focus();
+          return;
+        }
+        searchRef.current?.focus();
+        return;
+      }
+
+      const isFunctionKey = /^F\d{1,2}$/.test(e.key);
+
+      // Don't steal normal keys while typing; F-keys and Esc still work.
+      if (isTypingTarget(e.target) && !isFunctionKey) return;
+      // Reprint modal still blocks; quick post-sale toast does not (Esc already handled).
+      if (
+        receiptIsReprint ||
+        showCash ||
+        showReceive ||
+        showSupplierReturn ||
+        showHistory ||
+        showSync ||
+        checkoutBusy ||
+        discountUpdating
+      ) {
+        return;
+      }
+
+      const canPay =
+        cart.length > 0 &&
+        (posMode === "sale"
+          ? can("pos:sell")
+          : posMode === "return"
+            ? can("pos:return")
+            : can("pos:owner_sale"));
+
+      if (e.key === "F2") {
+        e.preventDefault();
+        if (!canPay) return;
+        if (showCashTender) confirmCashTender();
+        else void beginCheckout();
+        return;
+      }
+      if (e.key === "F3") {
+        e.preventDefault();
+        if (!canPay || posMode === "owner" || showCashTender) return;
+        void completeCheckout("CARD");
+        return;
+      }
+      if (e.key === "F4") {
+        e.preventDefault();
+        if (!canPay || posMode === "owner" || showCashTender) return;
+        void completeCheckout("TRANSFER");
+        return;
+      }
+      if (e.key === "F5") {
+        e.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+        return;
+      }
+      if (e.key === "F8") {
+        e.preventDefault();
+        if (cart.length === 0 || checkoutBusy) return;
+        void (async () => {
+          discountRequestRef.current++;
+          await discountQueueRef.current.catch(() => undefined);
+          await clearCart();
+          setShowCashTender(false);
+          setTenderInput("");
+          setTenderError("");
+          setDiscountPercent(0);
+          setDiscountInput("");
+          setDiscountError("");
+          setDiscountUpdating(false);
+          setCart(await getCart());
+        })();
+        return;
+      }
+
+      // Quantity chips for next item (skip while cash tender is open).
+      if (showCashTender) return;
+      if (e.key === "1" || e.key === "2" || e.key === "3" || e.key === "5") {
+        const n = Number(e.key);
+        e.preventDefault();
+        setPendingQty(n);
+        return;
+      }
+      if (e.key === "0") {
+        e.preventDefault();
+        setPendingQty(10);
+        return;
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    configured,
+    staff,
+    showSettings,
+    receipt,
+    receiptIsReprint,
+    showCashTender,
+    showCash,
+    showReceive,
+    showSupplierReturn,
+    showHistory,
+    showSync,
+    editingQtyId,
+    search,
+    cart,
+    tenderInput,
+    posMode,
+    checkoutBusy,
+    discountUpdating,
+    staff?.permissions,
+  ]);
+
+  useEffect(() => {
+    if (!configured || !staff || showSettings) return;
     const sync = async () => {
       if (!isOnline()) return;
       await runSyncCycle();
@@ -262,21 +486,6 @@ export function PosApp() {
       (p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q),
     );
   }, [catalogProducts, search]);
-
-  async function handleAdd(product: ProductDto) {
-    setShowPaymentChoice(false);
-    const listOrCost =
-      posMode === "owner" ? product.costCents : effectivePosPriceCents(product);
-    const unitCents =
-      posMode === "sale" && discountPercent > 0
-        ? discountedUnitCents(effectivePosPriceCents(product), discountPercent)
-        : listOrCost;
-    await addToCart(product, unitCents);
-    setCart(await getCart());
-    setSearch("");
-    if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
-    searchRef.current?.focus();
-  }
 
   function checkoutIsValid() {
     if (!staff) return;
@@ -313,14 +522,21 @@ export function PosApp() {
 
   async function beginCheckout() {
     if (!checkoutIsValid()) return;
-    if (posMode === "owner") {
-      await completeCheckout("CASH");
+    // Sale cash: collect tender + show change before completing.
+    if (posMode === "sale") {
+      setTenderError("");
+      setTenderInput("");
+      setShowCashTender(true);
+      queueMicrotask(() => tenderInputRef.current?.focus());
       return;
     }
-    setShowPaymentChoice(true);
+    await completeCheckout("CASH");
   }
 
-  async function completeCheckout(method: PaymentMethodCode) {
+  async function completeCheckout(
+    method: PaymentMethodCode,
+    cashTender?: { tenderCents: number; changeCents: number },
+  ) {
     if (!staff || checkoutBusy || !checkoutIsValid()) return;
     setCheckoutBusy(true);
     const completedMode = posMode;
@@ -337,13 +553,12 @@ export function PosApp() {
               appliedDiscount,
               method,
             );
-      if (!sale) return;
-      let receiptNumber: string | null = null;
-      if (isOnline()) {
-        await pushPendingSales();
-        const row = await posDb.salesOutbox.get(sale.localId);
-        receiptNumber = row?.receiptNumber ?? null;
+      if (!sale) {
+        setCheckoutBusy(false);
+        return;
       }
+
+      // Show receipt immediately — don't wait on sync before the next customer.
       setReceipt({
         ...sale,
         kind:
@@ -352,14 +567,18 @@ export function PosApp() {
             : completedMode === "owner"
               ? "OWNER"
               : "SALE",
-        receiptNumber,
+        receiptNumber: null,
+        tenderCents: cashTender?.tenderCents,
+        changeCents: cashTender?.changeCents,
         lines: sale.lines.map((line) => ({
           ...line,
           productName: cartSnapshot.find((c) => c.productId === line.productId)?.name ?? "Item",
         })),
       });
       setReceiptIsReprint(false);
-      setShowPaymentChoice(false);
+      setShowCashTender(false);
+      setTenderInput("");
+      setTenderError("");
       setDiscountPercent(0);
       setDiscountInput("");
       setMessage(
@@ -371,23 +590,61 @@ export function PosApp() {
               ? `Sale recorded with ${appliedDiscount}% discount.`
               : "",
       );
-      await refresh();
-      if (isOnline()) {
-        await pushPendingSales();
-        await pullCatalog();
-        await refresh();
-      }
-      // Always return to Sale mode after a completed checkout.
-      if (can("pos:sell") && completedMode !== "sale") {
-        await switchMode("sale");
-      } else if (can("pos:sell")) {
-        setPosMode("sale");
-      }
+      setCheckoutBusy(false);
+      queueMicrotask(() => {
+        searchRef.current?.focus();
+        searchRef.current?.select();
+      });
+
+      // Sync + receipt number + catalog refresh in the background.
+      void (async () => {
+        try {
+          await refresh();
+          if (isOnline()) {
+            await pushPendingSales();
+            const row = await posDb.salesOutbox.get(sale.localId);
+            const receiptNumber = row?.receiptNumber ?? null;
+            if (receiptNumber) {
+              setReceipt((prev) =>
+                prev && prev.localId === sale.localId ? { ...prev, receiptNumber } : prev,
+              );
+            }
+            await pullCatalog();
+            await refresh();
+          }
+          if (can("pos:sell") && completedMode !== "sale") {
+            await switchMode("sale");
+          } else if (can("pos:sell")) {
+            setPosMode("sale");
+          }
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Sale saved, but sync failed.");
+        }
+      })();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not complete checkout.");
-    } finally {
       setCheckoutBusy(false);
     }
+  }
+
+  function confirmCashTender() {
+    const dueCents = cart.reduce((sum, line) => sum + line.lineCents, 0);
+    const totalDinars = Math.round(dueCents / 100);
+    const raw = tenderInput.trim() === "" ? NaN : Number.parseFloat(tenderInput);
+    if (Number.isNaN(raw) || raw < 0) {
+      setTenderError("Enter the cash amount received.");
+      return;
+    }
+    const tenderDinars = Math.round(raw);
+    if (tenderDinars < totalDinars) {
+      setTenderError(
+        `Not enough cash. Need ${formatMoney(dueCents)} (short ${formatMoney((totalDinars - tenderDinars) * 100)}).`,
+      );
+      return;
+    }
+    const tenderCents = tenderDinars * 100;
+    const changeCents = tenderCents - dueCents;
+    void completeCheckout("CASH", { tenderCents, changeCents });
   }
 
   async function handleStaffLogout() {
@@ -423,6 +680,25 @@ export function PosApp() {
       : totalCents;
   const discountAmountCents =
     posMode === "sale" ? Math.max(0, subtotalCents - totalCents) : 0;
+
+  const tenderDinarsPreview =
+    tenderInput.trim() === "" ? null : Number.parseFloat(tenderInput);
+  const tenderCentsPreview =
+    tenderDinarsPreview != null && !Number.isNaN(tenderDinarsPreview)
+      ? Math.round(tenderDinarsPreview) * 100
+      : null;
+  const changeCentsPreview =
+    tenderCentsPreview != null ? tenderCentsPreview - totalCents : null;
+
+  const tenderSuggestions = (() => {
+    const totalDinars = Math.round(totalCents / 100);
+    const suggestions = new Set<number>([totalDinars]);
+    for (const step of [250, 500, 1000, 5000, 10000, 25000, 50000]) {
+      const rounded = Math.ceil(totalDinars / step) * step;
+      if (rounded > totalDinars) suggestions.add(rounded);
+    }
+    return [...suggestions].sort((a, b) => a - b).slice(0, 6);
+  })();
 
   return (
     <div className="pos-shell">
@@ -518,10 +794,23 @@ export function PosApp() {
             }}
           >
             <h2>Products</h2>
+            <div className="pos-qty-bar" role="group" aria-label="Quantity for next item">
+              <span className="pos-qty-bar-label">Qty</span>
+              {[1, 2, 3, 5, 10].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  className={`btn btn-secondary pos-qty-chip${pendingQty === n ? " is-active" : ""}`}
+                  onClick={() => setPendingQty(n)}
+                >
+                  ×{n}
+                </button>
+              ))}
+            </div>
             <input
               ref={searchRef}
               className="pos-search"
-              placeholder="Scan barcode (SKU) or search by name…"
+              placeholder="Scan SKU, or SKU*5 / 5*SKU for quantity…"
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
               onKeyDown={handleSearchKeyDown}
@@ -573,6 +862,9 @@ export function PosApp() {
 
         <section className="pos-panel pos-cart-panel">
           <h2>Cart</h2>
+          <p className="pos-shortcuts-hint">
+            F2 Cash · F3 Card · F4 Transfer · F5 Search · F8 Clear · Esc Cancel · 1/2/3/5/0 Qty
+          </p>
           {canDiscount && (
             <div className={`pos-discount-row${discountPercent > 0 ? " is-active" : ""}`}>
               <div className="pos-discount-controls">
@@ -613,17 +905,77 @@ export function PosApp() {
                     <div className="pos-cart-line-info">
                       <div>{line.name}</div>
                       <div className="pos-cart-qty">
-                        <button type="button" className="qty-btn" onClick={async () => {
-                          setShowPaymentChoice(false);
-                          await decrementCartLine(line.productId);
-                          setCart(await getCart());
-                        }}>−</button>
-                        <span>{line.quantity}</span>
-                        <button type="button" className="qty-btn" onClick={async () => {
-                          setShowPaymentChoice(false);
-                          await incrementCartLine(line.productId);
-                          setCart(await getCart());
-                        }}>+</button>
+                        <button
+                          type="button"
+                          className="qty-btn"
+                          aria-label="Decrease quantity"
+                          onClick={async () => {
+                            await decrementCartLine(line.productId);
+                            setCart(await getCart());
+                          }}
+                        >
+                          −
+                        </button>
+                        {editingQtyId === line.productId ? (
+                          <input
+                            className="pos-qty-input"
+                            type="number"
+                            min={1}
+                            inputMode="numeric"
+                            value={editingQtyValue}
+                            autoFocus
+                            onChange={(e) => setEditingQtyValue(e.target.value)}
+                            onBlur={() => void applyLineQty(line.productId, editingQtyValue)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                void applyLineQty(line.productId, editingQtyValue);
+                              }
+                              if (e.key === "Escape") {
+                                setEditingQtyId(null);
+                                setEditingQtyValue("");
+                              }
+                            }}
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            className="pos-qty-value"
+                            title="Tap to type quantity"
+                            onClick={() => {
+                              setEditingQtyId(line.productId);
+                              setEditingQtyValue(String(line.quantity));
+                            }}
+                          >
+                            {line.quantity}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="qty-btn"
+                          aria-label="Increase quantity"
+                          onClick={async () => {
+                            await incrementCartLine(line.productId);
+                            setCart(await getCart());
+                          }}
+                        >
+                          +
+                        </button>
+                        <div className="pos-line-qty-quick">
+                          {[2, 5, 10].map((n) => (
+                            <button
+                              key={n}
+                              type="button"
+                              className="btn btn-secondary pos-line-qty-chip"
+                              onClick={async () => {
+                                await setCartLineQuantity(line.productId, n);
+                                setCart(await getCart());
+                              }}
+                            >
+                              ×{n}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
                     <div className="pos-cart-line-total">
@@ -634,7 +986,6 @@ export function PosApp() {
                         aria-label={`Remove ${line.name} from cart`}
                         title="Remove from cart"
                         onClick={async () => {
-                          setShowPaymentChoice(false);
                           await removeFromCart(line.productId);
                           setCart(await getCart());
                         }}
@@ -678,24 +1029,137 @@ export function PosApp() {
                     : posMode === "return"
                       ? can("pos:return")
                       : can("pos:owner_sale")) && (
-                    <button
-                      className="btn pos-complete-sale-btn"
-                      type="button"
-                      onClick={() => void beginCheckout()}
-                      disabled={discountUpdating || checkoutBusy}
-                    >
-                      {checkoutBusy
-                        ? "Processing…"
-                        : posMode === "return"
-                          ? "RETURN"
-                          : "Checkout"}
-                    </button>
+                    <>
+                      {!showCashTender && (
+                        <>
+                          <button
+                            className="btn pos-complete-sale-btn pos-cash-btn"
+                            type="button"
+                            onClick={() => void beginCheckout()}
+                            disabled={discountUpdating || checkoutBusy}
+                          >
+                            {checkoutBusy
+                              ? "Processing…"
+                              : posMode === "return"
+                                ? "CASH REFUND"
+                                : posMode === "owner"
+                                  ? "COMPLETE (CASH)"
+                                  : "CASH"}
+                          </button>
+                          {posMode !== "owner" && (
+                            <div className="pos-alt-payments" role="group" aria-label="Other payment methods">
+                              {PAYMENT_METHODS.filter((m) => m.value !== "CASH").map((method) => (
+                                <button
+                                  key={method.value}
+                                  type="button"
+                                  className="btn btn-secondary pos-alt-payment-btn"
+                                  disabled={discountUpdating || checkoutBusy}
+                                  onClick={() => void completeCheckout(method.value)}
+                                >
+                                  {method.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {showCashTender && posMode === "sale" && (
+                        <div className="pos-cash-tender" role="group" aria-label="Cash tender">
+                          <div className="pos-cash-tender-row">
+                            <span>Amount due</span>
+                            <strong>{formatMoney(totalCents)}</strong>
+                          </div>
+                          <label className="pos-cash-tender-label">
+                            Cash received (IQD)
+                            <input
+                              ref={tenderInputRef}
+                              type="number"
+                              min={0}
+                              step={1}
+                              inputMode="numeric"
+                              value={tenderInput}
+                              onChange={(e) => {
+                                setTenderInput(e.target.value);
+                                setTenderError("");
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  confirmCashTender();
+                                }
+                              }}
+                              placeholder="Enter amount…"
+                            />
+                          </label>
+                          <div className="pos-tender-suggestions">
+                            {tenderSuggestions.map((dinars) => (
+                              <button
+                                key={dinars}
+                                type="button"
+                                className="btn btn-secondary pos-tender-chip"
+                                disabled={checkoutBusy}
+                                onClick={() => {
+                                  setTenderInput(String(dinars));
+                                  setTenderError("");
+                                }}
+                              >
+                                {dinars === Math.round(totalCents / 100)
+                                  ? `Exact ${formatMoney(totalCents)}`
+                                  : formatMoney(dinars * 100)}
+                              </button>
+                            ))}
+                          </div>
+                          <div
+                            className={`pos-cash-tender-row pos-change-row ${
+                              changeCentsPreview != null && changeCentsPreview < 0
+                                ? "pos-change-short"
+                                : ""
+                            }`}
+                          >
+                            <span>Change due</span>
+                            <strong>
+                              {changeCentsPreview == null
+                                ? "—"
+                                : changeCentsPreview < 0
+                                  ? `Short ${formatMoney(-changeCentsPreview)}`
+                                  : formatMoney(changeCentsPreview)}
+                            </strong>
+                          </div>
+                          {tenderError && <p className="pos-error">{tenderError}</p>}
+                          <div className="pos-tender-actions">
+                            <button
+                              className="btn pos-complete-sale-btn pos-cash-btn"
+                              type="button"
+                              disabled={checkoutBusy}
+                              onClick={() => confirmCashTender()}
+                            >
+                              {checkoutBusy ? "Processing…" : "Confirm cash"}
+                            </button>
+                            <button
+                              className="btn btn-secondary"
+                              type="button"
+                              disabled={checkoutBusy}
+                              onClick={() => {
+                                setShowCashTender(false);
+                                setTenderInput("");
+                                setTenderError("");
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                   <button className="btn pos-clear-cart-btn" type="button" disabled={discountUpdating || checkoutBusy} onClick={async () => {
                     discountRequestRef.current++;
                     await discountQueueRef.current.catch(() => undefined);
                     await clearCart();
-                    setShowPaymentChoice(false);
+                    setShowCashTender(false);
+                    setTenderInput("");
+                    setTenderError("");
                     setDiscountPercent(0);
                     setDiscountInput("");
                     setDiscountError("");
@@ -705,31 +1169,6 @@ export function PosApp() {
                     Clear cart
                   </button>
                 </div>
-                {showPaymentChoice && posMode !== "owner" && (
-                  <div className="pos-checkout-payment" role="group" aria-label="Select payment method">
-                    <div className="pos-checkout-payment-buttons">
-                      {PAYMENT_METHODS.map((method) => (
-                        <button
-                          key={method.value}
-                          type="button"
-                          className="btn pos-payment-choice-btn"
-                          disabled={checkoutBusy}
-                          onClick={() => void completeCheckout(method.value)}
-                        >
-                          {method.label}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        disabled={checkoutBusy}
-                        onClick={() => setShowPaymentChoice(false)}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
             </>
           )}

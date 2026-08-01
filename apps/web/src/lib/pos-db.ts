@@ -44,6 +44,10 @@ export interface CompletedSale {
   paymentMethod?: "CASH" | "CARD" | "TRANSFER";
   /** Pre-discount subtotal when a discount was applied. */
   subtotalCents?: number;
+  /** Cash received from customer (sale cash tender). */
+  tenderCents?: number;
+  /** Change returned to customer. */
+  changeCents?: number;
   lines: Array<SaleLineDto & { productName?: string }>;
   staffId?: string;
   staffName?: string;
@@ -216,16 +220,18 @@ async function putCartLine(line: CartLine) {
   });
 }
 
-export async function addToCart(product: ProductDto, unitCents?: number) {
+export async function addToCart(product: ProductDto, unitCents?: number, addQty = 1) {
+  const qty = Math.max(1, Math.floor(addQty));
   const existing = await posDb.cart.get(product.id);
   const price = unitCents ?? effectivePosPriceCents(product);
-  const nextQty = (existing?.quantity ?? 0) + 1;
+  const unit = existing ? existing.unitCents : price;
+  const nextQty = (existing?.quantity ?? 0) + qty;
   await putCartLine({
     productId: product.id,
     name: product.name,
     quantity: nextQty,
-    unitCents: existing ? existing.unitCents : price,
-    lineCents: nextQty * (existing ? existing.unitCents : price),
+    unitCents: unit,
+    lineCents: nextQty * unit,
   });
 }
 
@@ -264,6 +270,21 @@ export async function decrementCartLine(productId: string) {
   const line = await posDb.cart.get(productId);
   if (!line) return;
   await putCartLine({ ...line, quantity: line.quantity - 1 });
+}
+
+export async function setCartLineQuantity(productId: string, quantity: number) {
+  const line = await posDb.cart.get(productId);
+  if (!line) return;
+  const qty = Math.floor(quantity);
+  if (!Number.isFinite(qty) || qty <= 0) {
+    await posDb.cart.delete(productId);
+    return;
+  }
+  await putCartLine({
+    ...line,
+    quantity: qty,
+    lineCents: qty * line.unitCents,
+  });
 }
 
 export async function removeFromCart(productId: string) {
