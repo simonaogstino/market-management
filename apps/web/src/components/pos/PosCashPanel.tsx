@@ -11,6 +11,9 @@ type SessionPayload = {
   openingCents: number;
   openedByName?: string | null;
   note?: string | null;
+  expectedCents?: number | null;
+  countedCents?: number | null;
+  varianceCents?: number | null;
   movements: Array<{
     id: string;
     type: "PAY_IN" | "PAY_OUT";
@@ -128,9 +131,12 @@ export function PosCashPanel({
           countedAmount,
         }),
       });
-      const variance = data.session?.varianceCents ?? 0;
+      const closed = data.session;
+      const variance = closed?.varianceCents ?? 0;
       setMessage(
-        `Drawer closed. Expected ${formatMoney(data.session.expectedCents)}, counted ${formatMoney(data.session.countedCents)}, variance ${formatMoney(variance)}.`,
+        closed
+          ? `Drawer closed. Expected ${formatMoney(closed.expectedCents ?? 0)}, counted ${formatMoney(closed.countedCents ?? 0)}, variance ${formatMoney(variance)}.`
+          : "Drawer closed.",
       );
       setCountedAmount("");
       await load();
