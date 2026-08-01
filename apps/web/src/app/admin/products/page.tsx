@@ -30,7 +30,7 @@ export default async function ProductsPage() {
 
       {sampleCount > 0 && (
         <div className="card" style={{ marginBottom: "1rem", background: "#fffbeb" }}>
-          <p style={{ margin: 0 }}>
+          <div style={{ margin: 0 }}>
             {sampleCount} sample product(s) still active. Add your real products, then{" "}
             <form action={deactivateSampleProductsForm} style={{ display: "inline" }}>
               <button type="submit" className="link-button">
@@ -38,7 +38,7 @@ export default async function ProductsPage() {
               </button>
             </form>
             .
-          </p>
+          </div>
         </div>
       )}
 
