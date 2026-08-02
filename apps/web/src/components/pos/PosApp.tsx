@@ -785,13 +785,23 @@ export function PosApp() {
             <History className="pos-ico" aria-hidden />
             History
           </button>
-          <button className="btn btn-secondary" type="button" onClick={handleStaffLogout}>
+          <button
+            className="btn btn-secondary btn-icon-only"
+            type="button"
+            onClick={handleStaffLogout}
+            title="Log out"
+            aria-label="Log out"
+          >
             <LogOut className="pos-ico" aria-hidden />
-            Log out
           </button>
-          <button className="btn btn-secondary" type="button" onClick={() => setShowSettings(true)}>
+          <button
+            className="btn btn-secondary btn-icon-only"
+            type="button"
+            onClick={() => setShowSettings(true)}
+            title="Settings"
+            aria-label="Settings"
+          >
             <Settings className="pos-ico" aria-hidden />
-            Settings
           </button>
         </div>
       </header>

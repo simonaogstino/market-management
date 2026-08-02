@@ -594,6 +594,13 @@ input, select {
   background: #334155;
 }
 
+.pos-shell .btn-icon-only {
+  width: 2.5rem;
+  min-width: 2.5rem;
+  padding: 0.5rem;
+  gap: 0;
+}
+
 /* Compact icons — keep existing button height/padding */
 .pos-ico {
   width: 1rem;
