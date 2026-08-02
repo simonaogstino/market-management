@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { PackageMinus, Plus, X } from "lucide-react";
-import type { ProductDto } from "@market/shared";
-import { supplierReturnStock } from "@/lib/pos-sync";
-import { formatMoney } from "@/lib/suppliers";
+import type { ProductDto, StoreSettingsDto } from "@market/shared";
+import { formatMoney } from "@market/shared";
+import { supplierReturnStock, type SupplierReturnReceiptDto } from "@/lib/pos-sync";
 import type { StaffSession } from "@/lib/pos-db";
+import { PosSupplierReturnReceipt } from "./PosSupplierReturnReceipt";
 
 interface SupplierOption {
   id: string;
@@ -21,12 +22,16 @@ export function PosSupplierReturn({
   staff,
   products,
   suppliers,
+  terminalName,
+  store,
   onClose,
   onSuccess,
 }: {
   staff: StaffSession;
   products: ProductDto[];
   suppliers: SupplierOption[];
+  terminalName: string;
+  store?: StoreSettingsDto | null;
   onClose: () => void;
   onSuccess: (message: string) => void;
 }) {
@@ -37,6 +42,7 @@ export function PosSupplierReturn({
   const [qty, setQty] = useState("1");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [receipt, setReceipt] = useState<SupplierReturnReceiptDto | null>(null);
 
   const supplierName = suppliers.find((s) => s.id === supplierId)?.name;
 
@@ -98,13 +104,27 @@ export function PosSupplierReturn({
         lines,
         reference: reference || undefined,
       });
+      setReceipt({
+        ...result,
+        staffName: result.staffName ?? staff.staffName,
+      });
       onSuccess(`Returned ${formatMoney(result.totalCostCents)} to supplier (credit deducted).`);
-      onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Return failed.");
     } finally {
       setLoading(false);
     }
+  }
+
+  if (receipt) {
+    return (
+      <PosSupplierReturnReceipt
+        receipt={receipt}
+        terminalName={terminalName}
+        store={store}
+        onClose={onClose}
+      />
+    );
   }
 
   return (
@@ -121,9 +141,7 @@ export function PosSupplierReturn({
         </p>
 
         {supplierName && (
-          <p style={{ margin: "0 0 1rem", fontWeight: 600 }}>
-            Supplier: {supplierName}
-          </p>
+          <p style={{ margin: "0 0 1rem", fontWeight: 600 }}>Supplier: {supplierName}</p>
         )}
 
         <div className="pos-search-row">

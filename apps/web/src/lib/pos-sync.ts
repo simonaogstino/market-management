@@ -181,18 +181,44 @@ export async function receiveStock(params: {
   sku: string;
   quantity: number;
   note?: string;
+  receiptFile?: File | null;
 }) {
   if (!isOnline()) {
     throw new Error("Internet required to receive stock.");
   }
 
-  const response = await apiFetch("/api/pos/stock/receive", {
+  const config = await getTerminalConfig();
+  if (!config) throw new Error("Terminal not configured");
+
+  const form = new FormData();
+  form.append("staffId", params.staffId);
+  form.append("sku", params.sku);
+  form.append("quantity", String(params.quantity));
+  if (params.note) form.append("note", params.note);
+  if (params.receiptFile) form.append("receipt", params.receiptFile);
+
+  const response = await fetch("/api/pos/stock/receive", {
     method: "POST",
-    body: JSON.stringify(params),
+    headers: {
+      "x-terminal-key": config.apiKey,
+    },
+    body: form,
   });
-  const data = await response.json();
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error((data as { error?: string }).error ?? `API error ${response.status}`);
+  }
+
   await pullCatalog();
-  return data as { success: boolean; productName: string; newStockQty: number };
+  return data as {
+    success: boolean;
+    productName: string;
+    newStockQty: number;
+    movementId?: string;
+    hasAttachment?: boolean;
+    attachmentWarning?: string;
+  };
 }
 
 export async function createPosProduct(params: {
@@ -227,13 +253,33 @@ export async function createPosProduct(params: {
   };
 }
 
+export type SupplierReturnReceiptDto = {
+  success: boolean;
+  id: string;
+  totalCostCents: number;
+  returnedAt: string;
+  referenceNumber: string | null;
+  note: string | null;
+  supplierId: string;
+  supplierName: string;
+  staffName?: string;
+  lines: Array<{
+    productId: string;
+    productName: string;
+    sku: string;
+    quantity: number;
+    unitCostCents: number;
+    lineCostCents: number;
+  }>;
+};
+
 export async function supplierReturnStock(params: {
   staffId: string;
   supplierId: string;
   lines: Array<{ productId: string; quantity: number }>;
   reference?: string;
   note?: string;
-}) {
+}): Promise<SupplierReturnReceiptDto> {
   if (!isOnline()) {
     throw new Error("Internet required to return stock to supplier.");
   }
@@ -242,7 +288,7 @@ export async function supplierReturnStock(params: {
     method: "POST",
     body: JSON.stringify(params),
   });
-  const data = await response.json();
+  const data = (await response.json()) as SupplierReturnReceiptDto;
   await pullCatalog();
-  return data as { success: boolean; totalCostCents: number };
+  return data;
 }

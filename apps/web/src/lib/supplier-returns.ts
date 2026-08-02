@@ -42,7 +42,7 @@ export async function processSupplierReturn(input: {
     }
   }
 
-  await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const supplierReturn = await tx.supplierReturn.create({
       data: {
         supplierId: input.supplierId,
@@ -59,6 +59,11 @@ export async function processSupplierReturn(input: {
             unitCostCents: line.unitCostCents,
             lineCostCents: line.quantity * line.unitCostCents,
           })),
+        },
+      },
+      include: {
+        lines: {
+          include: { product: { select: { name: true, sku: true } } },
         },
       },
     });
@@ -85,9 +90,28 @@ export async function processSupplierReturn(input: {
         },
       });
     }
+
+    return supplierReturn;
   });
 
-  return { success: true as const, totalCostCents };
+  return {
+    success: true as const,
+    id: result.id,
+    totalCostCents,
+    returnedAt: result.returnedAt.toISOString(),
+    referenceNumber: result.referenceNumber,
+    note: result.note,
+    supplierId: supplier.id,
+    supplierName: supplier.name,
+    lines: result.lines.map((line) => ({
+      productId: line.productId,
+      productName: line.product.name,
+      sku: line.product.sku,
+      quantity: line.quantity,
+      unitCostCents: line.unitCostCents,
+      lineCostCents: line.lineCostCents,
+    })),
+  };
 }
 
 function parseReturnLines(formData: FormData) {

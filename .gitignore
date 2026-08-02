@@ -5,6 +5,8 @@ dist
 *.log
 logs/*
 !logs/.gitkeep
+uploads/*
+!uploads/.gitkeep
 .env
 .env.local
 .env.*.local

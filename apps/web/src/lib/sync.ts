@@ -390,7 +390,7 @@ export async function receiveStockForTerminal(
   });
   if (!product) return { error: "Product not found." };
 
-  await prisma.$transaction(async (tx) => {
+  const movement = await prisma.$transaction(async (tx) => {
     await tx.product.update({
       where: { id: productId },
       data: {
@@ -398,7 +398,7 @@ export async function receiveStockForTerminal(
         version: { increment: 1 },
       },
     });
-    await tx.stockMovement.create({
+    return tx.stockMovement.create({
       data: {
         productId,
         storeId: terminalStoreId,
@@ -410,5 +410,10 @@ export async function receiveStockForTerminal(
     });
   });
 
-  return { success: true, productName: product.name, newStockQty: product.stockQty + quantity };
+  return {
+    success: true,
+    productName: product.name,
+    newStockQty: product.stockQty + quantity,
+    movementId: movement.id,
+  };
 }

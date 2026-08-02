@@ -64,5 +64,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }
 
-  return NextResponse.json({ success: true, totalCostCents: result.totalCostCents });
+  return NextResponse.json({
+    success: true,
+    id: result.id,
+    totalCostCents: result.totalCostCents,
+    returnedAt: result.returnedAt,
+    referenceNumber: result.referenceNumber,
+    note: result.note,
+    supplierId: result.supplierId,
+    supplierName: result.supplierName,
+    staffName: staff.name,
+    lines: result.lines,
+  });
 }

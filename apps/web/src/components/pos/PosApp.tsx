@@ -1228,6 +1228,8 @@ export function PosApp() {
           staff={staff}
           products={products}
           suppliers={suppliers}
+          terminalName={terminalName}
+          store={storeSettings}
           onClose={() => setShowSupplierReturn(false)}
           onSuccess={async (msg) => {
             setMessage(msg);

@@ -254,6 +254,10 @@ model StockMovement {
   type      StockMovementType
   quantity  Int
   note      String?
+  /** Relative path under uploads/ for supplier receipt photo/PDF (POS receive). */
+  attachmentPath String?
+  attachmentName String?
+  attachmentMime String?
   userId    String?
   user      User?             @relation(fields: [userId], references: [id])
   supplierDeliveryId String?

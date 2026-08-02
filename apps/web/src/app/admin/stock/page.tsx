@@ -45,6 +45,7 @@ export default async function StockPage() {
                 <th>Type</th>
                 <th align="right">Qty</th>
                 <th>Note</th>
+                <th>Receipt</th>
                 <th>By</th>
               </tr>
             </thead>
@@ -58,13 +59,22 @@ export default async function StockPage() {
                   </td>
                   <td>
                     <span className={`badge ${m.type === "RECEIVE" ? "badge-success" : "badge-warning"}`}>
-                      {m.type === "RECEIVE" ? "Receive" : "Adjustment"}
+                      {m.type === "RECEIVE" ? "Receive" : m.type === "RETURN_TO_SUPPLIER" ? "Supplier return" : "Adjustment"}
                     </span>
                   </td>
                   <td align="right" style={{ color: m.quantity >= 0 ? "var(--success)" : "var(--danger)" }}>
                     {m.quantity >= 0 ? `+${m.quantity}` : m.quantity}
                   </td>
                   <td>{m.note ?? "—"}</td>
+                  <td>
+                    {m.attachmentPath ? (
+                      <a href={`/api/admin/stock/attachment?id=${m.id}`} target="_blank" rel="noreferrer">
+                        View
+                      </a>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td>{m.user?.name ?? "—"}</td>
                 </tr>
               ))}

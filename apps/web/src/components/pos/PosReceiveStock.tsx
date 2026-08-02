@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { PackagePlus, Plus } from "lucide-react";
+import { PackagePlus, Plus, Paperclip } from "lucide-react";
 import type { ProductDto } from "@market/shared";
 import type { StaffSession } from "@/lib/pos-db";
 import { createPosProduct, receiveStock } from "@/lib/pos-sync";
@@ -24,6 +24,7 @@ export function PosReceiveStock({
   const [sku, setSku] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [note, setNote] = useState("");
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<ProductDto | null>(null);
@@ -196,9 +197,15 @@ export function PosReceiveStock({
         sku: product.sku,
         quantity: qty,
         note: note.trim() || undefined,
+        receiptFile,
       });
+      const attached = result.hasAttachment
+        ? " Receipt attached."
+        : result.attachmentWarning
+          ? ` (${result.attachmentWarning})`
+          : "";
       onSuccess(
-        `Received ${qty}× ${result.productName}. New stock: ${result.newStockQty}`,
+        `Received ${qty}× ${result.productName}. New stock: ${result.newStockQty}.${attached}`,
       );
       onClose();
     } catch (err) {
@@ -332,6 +339,24 @@ export function PosReceiveStock({
               placeholder="e.g. Delivery #4521"
             />
           </label>
+          <label>
+            Supplier receipt (photo or PDF)
+            <input
+              type="file"
+              accept="image/*,application/pdf,.pdf"
+              capture="environment"
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null;
+                setReceiptFile(file);
+              }}
+            />
+          </label>
+          {receiptFile && (
+            <p className="pos-muted" style={{ margin: 0, display: "flex", alignItems: "center", gap: "0.35rem" }}>
+              <Paperclip className="pos-ico" aria-hidden />
+              {receiptFile.name} ({Math.round(receiptFile.size / 1024)} KB)
+            </p>
+          )}
           {error && <p className="pos-error">{error}</p>}
           <button
             className="btn"
